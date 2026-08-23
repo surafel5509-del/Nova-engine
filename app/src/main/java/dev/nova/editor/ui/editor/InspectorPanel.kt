@@ -123,6 +123,9 @@ fun InspectorPanel(
             FloatField("Sorting order", sprite.sortingOrder.toFloat()) { v ->
                 viewModel.updateEntity(selected.id, "Edit sorting order") { e -> e.copy(sprite = e.sprite?.copy(sortingOrder = v.toInt())) }
             }
+            FloatField("Parallax factor", sprite.parallaxFactor) { v ->
+                viewModel.updateEntity(selected.id, "Edit parallax") { e -> e.copy(sprite = e.sprite?.copy(parallaxFactor = v.coerceIn(0f, 1f))) }
+            }
 
             Text(
                 "Texture: ${sprite.texturePath ?: "(none — colored quad)"}",
@@ -149,6 +152,12 @@ fun InspectorPanel(
                 onRemove = { viewModel.updateEntity(selected.id, "Remove Camera component") { it.copy(camera = null) } },
             )
             FloatField("Zoom (px/unit)", camera.zoom) { v -> viewModel.updateEntity(selected.id, "Edit camera zoom") { e -> e.copy(camera = e.camera?.copy(zoom = v)) } }
+            FloatField("Frustum width", camera.frustumWidth) { v -> viewModel.updateEntity(selected.id, "Edit frustum width") { e -> e.copy(camera = e.camera?.copy(frustumWidth = v)) } }
+            FloatField("Frustum height", camera.frustumHeight) { v -> viewModel.updateEntity(selected.id, "Edit frustum height") { e -> e.copy(camera = e.camera?.copy(frustumHeight = v)) } }
+            Text("Background", style = MaterialTheme.typography.bodySmall, color = NovaColors.TextDim)
+            ColorSlider("R", camera.backgroundR) { v -> viewModel.updateEntity(selected.id, "Edit camera bg") { e -> e.copy(camera = e.camera?.copy(backgroundR = v)) } }
+            ColorSlider("G", camera.backgroundG) { v -> viewModel.updateEntity(selected.id, "Edit camera bg") { e -> e.copy(camera = e.camera?.copy(backgroundG = v)) } }
+            ColorSlider("B", camera.backgroundB) { v -> viewModel.updateEntity(selected.id, "Edit camera bg") { e -> e.copy(camera = e.camera?.copy(backgroundB = v)) } }
             Spacer(Modifier.height(8.dp))
             HorizontalDivider(color = NovaColors.PanelBorder)
         }
@@ -167,8 +176,55 @@ fun InspectorPanel(
             FloatField("Gravity scale", body.gravityScale) { v -> viewModel.updateEntity(selected.id, "Edit gravity scale") { e -> e.copy(physicsBody = e.physicsBody?.copy(gravityScale = v)) } }
             FloatField("Friction", body.friction) { v -> viewModel.updateEntity(selected.id, "Edit friction") { e -> e.copy(physicsBody = e.physicsBody?.copy(friction = v)) } }
             FloatField("Restitution", body.restitution) { v -> viewModel.updateEntity(selected.id, "Edit restitution") { e -> e.copy(physicsBody = e.physicsBody?.copy(restitution = v)) } }
+            FloatField("Collider width", body.colliderWidth) { v -> viewModel.updateEntity(selected.id, "Edit collider width") { e -> e.copy(physicsBody = e.physicsBody?.copy(colliderWidth = v)) } }
+            FloatField("Collider height", body.colliderHeight) { v -> viewModel.updateEntity(selected.id, "Edit collider height") { e -> e.copy(physicsBody = e.physicsBody?.copy(colliderHeight = v)) } }
             Text(
-                "Simulation runs in Play mode (Phase 4).",
+                "Simulation runs in Play mode.",
+                style = MaterialTheme.typography.bodySmall,
+                color = NovaColors.TextDim,
+            )
+            Spacer(Modifier.height(8.dp))
+            HorizontalDivider(color = NovaColors.PanelBorder)
+        }
+
+        // --- Animator ---
+        selected.animator?.let { anim ->
+            ComponentHeader(
+                title = "Animator",
+                onReset = { viewModel.updateEntity(selected.id, "Reset Animator") { it.copy(animator = dev.nova.editor.scene.AnimatorComponent()) } },
+                onRemove = { viewModel.updateEntity(selected.id, "Remove Animator component") { it.copy(animator = null) } },
+            )
+            FloatField("Frame columns", anim.frameCols.toFloat()) { v -> viewModel.updateEntity(selected.id, "Edit frame cols") { e -> e.copy(animator = e.animator?.copy(frameCols = v.toInt().coerceAtLeast(1))) } }
+            FloatField("Frame rows", anim.frameRows.toFloat()) { v -> viewModel.updateEntity(selected.id, "Edit frame rows") { e -> e.copy(animator = e.animator?.copy(frameRows = v.toInt().coerceAtLeast(1))) } }
+            FloatField("Frames / sec", anim.framesPerSecond) { v -> viewModel.updateEntity(selected.id, "Edit fps") { e -> e.copy(animator = e.animator?.copy(framesPerSecond = v.coerceAtLeast(0.1f))) } }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Loop", style = MaterialTheme.typography.bodySmall, color = NovaColors.Text, modifier = Modifier.weight(1f))
+                Switch(checked = anim.loop, onCheckedChange = { v -> viewModel.updateEntity(selected.id, "Toggle loop") { e -> e.copy(animator = e.animator?.copy(loop = v)) } })
+            }
+            Text(
+                "Animation plays in Play mode (sprite-sheet UV frames).",
+                style = MaterialTheme.typography.bodySmall,
+                color = NovaColors.TextDim,
+            )
+            Spacer(Modifier.height(8.dp))
+            HorizontalDivider(color = NovaColors.PanelBorder)
+        }
+
+        // --- Particle emitter ---
+        selected.particles?.let { p ->
+            ComponentHeader(
+                title = "Particle Emitter",
+                onReset = { viewModel.updateEntity(selected.id, "Reset Particles") { it.copy(particles = dev.nova.editor.scene.ParticleEmitterComponent()) } },
+                onRemove = { viewModel.updateEntity(selected.id, "Remove Particles component") { it.copy(particles = null) } },
+            )
+            FloatField("Emission rate", p.emissionRate) { v -> viewModel.updateEntity(selected.id, "Edit emission") { e -> e.copy(particles = e.particles?.copy(emissionRate = v)) } }
+            FloatField("Lifetime (s)", p.lifetime) { v -> viewModel.updateEntity(selected.id, "Edit lifetime") { e -> e.copy(particles = e.particles?.copy(lifetime = v)) } }
+            FloatField("Speed", p.speed) { v -> viewModel.updateEntity(selected.id, "Edit speed") { e -> e.copy(particles = e.particles?.copy(speed = v)) } }
+            FloatField("Gravity", p.gravity) { v -> viewModel.updateEntity(selected.id, "Edit particle gravity") { e -> e.copy(particles = e.particles?.copy(gravity = v)) } }
+            FloatField("Start size", p.startSize) { v -> viewModel.updateEntity(selected.id, "Edit start size") { e -> e.copy(particles = e.particles?.copy(startSize = v)) } }
+            FloatField("End size", p.endSize) { v -> viewModel.updateEntity(selected.id, "Edit end size") { e -> e.copy(particles = e.particles?.copy(endSize = v)) } }
+            Text(
+                "Particles emit in Play mode.",
                 style = MaterialTheme.typography.bodySmall,
                 color = NovaColors.TextDim,
             )
@@ -194,6 +250,16 @@ fun InspectorPanel(
                 OutlinedButton(onClick = {
                     viewModel.updateEntity(selected.id, "Add Physics Body component") { it.copy(physicsBody = dev.nova.editor.scene.PhysicsBodyComponent()) }
                 }) { Text("Physics") }
+            }
+            if (selected.animator == null) {
+                OutlinedButton(onClick = {
+                    viewModel.updateEntity(selected.id, "Add Animator component") { it.copy(animator = dev.nova.editor.scene.AnimatorComponent()) }
+                }) { Text("Animator") }
+            }
+            if (selected.particles == null) {
+                OutlinedButton(onClick = {
+                    viewModel.updateEntity(selected.id, "Add Particles component") { it.copy(particles = dev.nova.editor.scene.ParticleEmitterComponent()) }
+                }) { Text("Particles") }
             }
         }
     }

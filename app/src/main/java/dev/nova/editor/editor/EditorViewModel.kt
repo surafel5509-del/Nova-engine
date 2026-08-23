@@ -19,6 +19,8 @@ enum class EditorTool(val label: String) { SELECT("Select"), MOVE("Move"), PAN("
 
 enum class LogLevel { INFO, WARNING, ERROR }
 
+enum class PlayState { STOPPED, PLAYING, PAUSED }
+
 data class LogEntry(val timestampMs: Long, val level: LogLevel, val message: String)
 
 class EditorViewModel(
@@ -54,6 +56,25 @@ class EditorViewModel(
         private set
 
     var dirty by mutableStateOf(false)
+        private set
+
+    // ---- Play mode / game view ----
+    var playState by mutableStateOf(PlayState.STOPPED)
+        private set
+
+    var gameView by mutableStateOf(false)
+        private set
+
+    var physicsDebug by mutableStateOf(false)
+        private set
+
+    /** Snapshot of the scene taken when Play was pressed; restored on Stop. */
+    private var prePlayScene: Scene? = null
+
+    // ---- Asset browser ----
+    var assetDir by mutableStateOf("assets")
+        private set
+    var assetRevision by mutableIntStateOf(0)
         private set
 
     /** Bumped whenever [scene] or [selectedId] changes; triggers native scene push. */
@@ -236,6 +257,84 @@ class EditorViewModel(
     }
 
     fun readTextureBytes(relativePath: String): ByteArray? = repository.readTexture(projectPath, relativePath)
+
+    // ---- Play mode ----
+
+    fun play() {
+        if (playState == PlayState.PLAYING) return
+        if (playState == PlayState.STOPPED) {
+            prePlayScene = scene
+            // Seed the game camera into the editor camera so Game View looks right.
+            scene.entities.firstOrNull { it.enabled && it.camera != null }?.let { camEntity ->
+                val wt = SceneOps.worldTransform(scene, camEntity.id)
+                camera = camera.copy(centerX = wt.x, centerY = wt.y)
+            }
+            log(LogLevel.INFO, "Play: simulation started (${scene.entities.count { it.physicsBody != null }} bodies)")
+        } else {
+            log(LogLevel.INFO, "Resumed")
+        }
+        playState = PlayState.PLAYING
+    }
+
+    fun pause() {
+        if (playState == PlayState.PLAYING) {
+            playState = PlayState.PAUSED
+            log(LogLevel.INFO, "Paused")
+        }
+    }
+
+    fun stop() {
+        if (playState == PlayState.STOPPED) return
+        playState = PlayState.STOPPED
+        prePlayScene?.let { scene = it }
+        prePlayScene = null
+        bumpRender()
+        log(LogLevel.INFO, "Stop: scene restored")
+    }
+
+    /** Called by the viewport when simulation positions are read back. */
+    fun applySimulatedPositions(positions: Map<String, Pair<Float, Float>>) {
+        if (positions.isEmpty()) return
+        // Guard against positions from a stale simulation run mutating a restored scene.
+        if (playState == PlayState.STOPPED) return
+        scene = scene.copy(entities = scene.entities.map { e ->
+            positions[e.id]?.let { (x, y) ->
+                e.copy(transform = e.transform.copy(x = x, y = y))
+            } ?: e
+        })
+        bumpRender()
+    }
+
+    fun toggleGameView() {
+        gameView = !gameView
+        log(LogLevel.INFO, if (gameView) "Game View" else "Scene View")
+    }
+
+    fun togglePhysicsDebug() {
+        physicsDebug = !physicsDebug
+    }
+
+    // ---- Asset browser ----
+
+    fun navigateAssets(dir: String) {
+        assetDir = dir
+    }
+
+    fun refreshAssets() {
+        assetRevision++
+    }
+
+    fun assignTextureToSelected(relativePath: String) {
+        val id = selectedId ?: run {
+            log(LogLevel.WARNING, "Select an entity before assigning a texture")
+            return
+        }
+        updateEntity(id, "Assign texture") { e ->
+            e.copy(sprite = e.sprite?.copy(texturePath = relativePath))
+        }
+        textureRevision++
+        log(LogLevel.INFO, "Assigned texture '$relativePath'")
+    }
 
     // ---- Picking ----
 

@@ -43,10 +43,19 @@ public:
     int viewportWidth() const { return viewportWidth_; }
     int viewportHeight() const { return viewportHeight_; }
 
+    void setShowGameCamera(bool show) { showGameCamera_ = show; }
+    void setShowPhysicsDebug(bool show) { showPhysicsDebug_ = show; }
+    void setUseGameCamera(bool use) { useGameCamera_ = use; }
+    void setClearColor(float r, float g, float b) { clearR_ = r; clearG_ = g; clearB_ = b; }
+
 private:
     Mat4 computeViewProj() const;
     void drawGrid();
     void drawSprites(const RenderScene& scene);
+    void drawLineBox(float cx, float cy, float halfW, float halfH, float rotationDeg,
+                     float r, float g, float b, float a, const Mat4& viewProj);
+    void drawGameCameraFrame(const RenderScene& scene, const Mat4& viewProj);
+    void drawPhysicsDebug(const RenderScene& scene, const Mat4& viewProj);
 
     SpriteBatch spriteBatch_;
     Shader gridShader_;
@@ -60,6 +69,12 @@ private:
     int viewportHeight_ = 1;
     bool gridVisible_ = true;
     bool initialized_ = false;
+    bool showGameCamera_ = true;
+    bool showPhysicsDebug_ = false;
+    bool useGameCamera_ = false;
+    float clearR_ = 0.078f;
+    float clearG_ = 0.090f;
+    float clearB_ = 0.110f;
 
     GLint gridUPpu_ = -1;
     GLint gridUCenter_ = -1;

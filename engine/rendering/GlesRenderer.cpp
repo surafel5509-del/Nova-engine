@@ -146,10 +146,10 @@ Mat4 GlesRenderer::computeViewProj() const {
 void GlesRenderer::drawFrame(const RenderScene& scene) {
     if (!initialized_) return;
     glViewport(0, 0, viewportWidth_, viewportHeight_);
-    glClearColor(kBackgroundR, kBackgroundG, kBackgroundB, 1.0f);
+    glClearColor(clearR_, clearG_, clearB_, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    if (gridVisible_) drawGrid();
+    if (gridVisible_ && !useGameCamera_) drawGrid();
     drawSprites(scene);
 }
 
@@ -173,13 +173,48 @@ void GlesRenderer::drawSprites(const RenderScene& scene) {
             auto it = textures_.find(sprite.texture);
             if (it != textures_.end()) texture = it->second.id();
         }
-        spriteBatch_.drawSprite(sprite, texture, whiteTexture_.id());
+        // Parallax: shift the sprite toward the camera center so layers with
+        // factor < 1 appear to move slower (background) than the world.
+        SpriteInstance s = sprite;
+        if (sprite.parallaxFactor < 0.999f) {
+            s.x = camera_.centerX + (sprite.x - camera_.centerX) * sprite.parallaxFactor;
+            s.y = camera_.centerY + (sprite.y - camera_.centerY) * sprite.parallaxFactor;
+        }
+        spriteBatch_.drawSprite(s, texture, whiteTexture_.id());
     }
     spriteBatch_.endFrame();
     for (const SpriteInstance& sprite : scene.sprites) {
         if (sprite.selected) {
             spriteBatch_.drawSelectionOutline(sprite, whiteTexture_.id());
         }
+    }
+    if (showGameCamera_ && scene.gameCamera.present && !useGameCamera_) {
+        drawGameCameraFrame(scene, viewProj);
+    }
+    if (showPhysicsDebug_) {
+        drawPhysicsDebug(scene, viewProj);
+    }
+}
+
+void GlesRenderer::drawLineBox(float cx, float cy, float halfW, float halfH, float rotationDeg,
+                               float r, float g, float b, float a, const Mat4& viewProj) {
+    (void)viewProj; // batch already holds the current viewProj from beginFrame
+    spriteBatch_.drawLineBox(cx, cy, halfW, halfH, rotationDeg, r, g, b, a, whiteTexture_.id());
+}
+
+void GlesRenderer::drawGameCameraFrame(const RenderScene& scene, const Mat4& viewProj) {
+    const GameCamera& c = scene.gameCamera;
+    drawLineBox(c.x, c.y, c.width * 0.5f, c.height * 0.5f, 0.0f,
+                0.95f, 0.85f, 0.30f, 1.0f, viewProj);
+}
+
+void GlesRenderer::drawPhysicsDebug(const RenderScene& scene, const Mat4& viewProj) {
+    for (const BodyRecord& b : scene.bodies) {
+        // Green = static, orange = dynamic, blue = kinematic.
+        float r = 0.3f, g = 0.9f, bl = 0.4f;
+        if (b.bodyType == 1) { r = 0.95f; g = 0.6f; bl = 0.2f; }
+        else if (b.bodyType == 2) { r = 0.3f; g = 0.6f; bl = 0.95f; }
+        drawLineBox(b.x, b.y, b.halfW, b.halfH, 0.0f, r, g, bl, 0.9f, viewProj);
     }
 }
 

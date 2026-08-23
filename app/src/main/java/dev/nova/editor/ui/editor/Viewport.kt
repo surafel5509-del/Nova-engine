@@ -19,11 +19,15 @@ import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.viewinterop.AndroidView
 import dev.nova.editor.bridge.EngineGlRenderer
+import dev.nova.editor.bridge.NativeEngine
 import dev.nova.editor.editor.EditorTool
 import dev.nova.editor.editor.EditorViewModel
 import dev.nova.editor.editor.LogLevel
+import dev.nova.editor.editor.PlayState
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.isActive
 import java.nio.ByteBuffer
 
 private enum class GestureMode { NONE, ENTITY_DRAG, CAMERA_PAN, CAMERA_ZOOM }
@@ -55,6 +59,37 @@ fun Viewport(
     LaunchedEffect(viewModel.textureRevision) {
         for (key in viewModel.requiredTextures) {
             loadAndSubmitTexture(viewModel, renderer, key)
+        }
+    }
+
+    // Game view + physics debug flags.
+    LaunchedEffect(viewModel.gameView) {
+        renderer.submitUseGameCamera(viewModel.gameView)
+    }
+    LaunchedEffect(viewModel.physicsDebug) {
+        renderer.submitShowPhysicsDebug(viewModel.physicsDebug)
+    }
+
+    // Play mode: start/stop the native simulation and step it on a loop.
+    // The engine owns the moving scene; physics writes positions back into the
+    // render scene natively, so no Kotlin re-push is needed during play.
+    LaunchedEffect(viewModel.playState) {
+        when (viewModel.playState) {
+            PlayState.PLAYING -> {
+                renderer.queue { NativeEngine.nativeStartSimulation(it) }
+                var last = System.nanoTime()
+                while (isActive && viewModel.playState == PlayState.PLAYING) {
+                    val now = System.nanoTime()
+                    val dt = ((now - last) / 1_000_000_000f).coerceAtMost(0.05f)
+                    last = now
+                    renderer.queue { NativeEngine.nativeStepSimulation(it, dt) }
+                    delay(16)
+                }
+            }
+            PlayState.PAUSED -> Unit
+            PlayState.STOPPED -> {
+                renderer.queue { NativeEngine.nativeStopSimulation(it) }
+            }
         }
     }
 

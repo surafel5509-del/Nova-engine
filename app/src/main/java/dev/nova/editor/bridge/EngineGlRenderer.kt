@@ -56,6 +56,20 @@ class EngineGlRenderer : GLSurfaceView.Renderer {
         queue { NativeEngine.nativeSetGridVisible(it, visible) }
     }
 
+    /** Re-applies runtime flags (game camera, physics debug) after GL (re)creation. */
+    @Volatile private var useGameCamera = false
+    @Volatile private var showPhysicsDebug = false
+
+    fun submitUseGameCamera(use: Boolean) {
+        useGameCamera = use
+        queue { NativeEngine.nativeSetUseGameCamera(it, use) }
+    }
+
+    fun submitShowPhysicsDebug(show: Boolean) {
+        showPhysicsDebug = show
+        queue { NativeEngine.nativeSetShowPhysicsDebug(it, show) }
+    }
+
     fun submitTexture(key: String, data: TextureData) {
         synchronized(textures) { textures[key] = data }
         queue { NativeEngine.nativeLoadTexture(it, key, data.rgba, data.width, data.height) }
@@ -73,6 +87,8 @@ class EngineGlRenderer : GLSurfaceView.Renderer {
         // Re-apply editor state (covers GL context loss / surface recreation).
         NativeEngine.nativeSetGridVisible(h, gridVisible)
         NativeEngine.nativeSetViewport(h, viewportCenterX, viewportCenterY, viewportPpu)
+        NativeEngine.nativeSetUseGameCamera(h, useGameCamera)
+        NativeEngine.nativeSetShowPhysicsDebug(h, showPhysicsDebug)
         synchronized(textures) {
             for ((key, data) in textures) {
                 NativeEngine.nativeLoadTexture(h, key, data.rgba, data.width, data.height)

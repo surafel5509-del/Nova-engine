@@ -67,13 +67,24 @@ class ProjectRepositoryTest {
     }
 
     @Test
-    fun `unimplemented templates are rejected`() {
-        try {
-            repository.createProject("R", "com.x", "1", ProjectOrientation.LANDSCAPE, ProjectDimension.TWO_D, ProjectTemplate.RPG)
-            throw AssertionError("Expected IllegalArgumentException")
-        } catch (e: IllegalArgumentException) {
-            // expected
-        }
+    fun `rpg template creates hero and torch`() {
+        val dir = repository.createProject("R", "com.x", "1", ProjectOrientation.LANDSCAPE, ProjectDimension.TWO_D, ProjectTemplate.RPG)
+        val (_, scene) = repository.openProject(dir.absolutePath)
+        assertNotNull(scene.entities.firstOrNull { it.name == "Hero" })
+        assertNotNull(scene.entities.firstOrNull { it.name == "Torch" })
+        val hero = scene.entities.first { it.name == "Hero" }
+        assertNotNull(hero.animator)
+    }
+
+    @Test
+    fun `arcade template creates bouncing ball and floor`() {
+        val dir = repository.createProject("A", "com.x", "1", ProjectOrientation.LANDSCAPE, ProjectDimension.TWO_D, ProjectTemplate.ARCADE)
+        val (_, scene) = repository.openProject(dir.absolutePath)
+        val ball = scene.entities.first { it.name == "Ball" }
+        assertEquals("dynamic", ball.physicsBody?.bodyType)
+        assertEquals(0.8f, ball.physicsBody!!.restitution, 1e-4f)
+        val floor = scene.entities.first { it.name == "Floor" }
+        assertEquals("static", floor.physicsBody?.bodyType)
     }
 
     @Test

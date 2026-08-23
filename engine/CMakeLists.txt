@@ -11,6 +11,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_library(novaengine SHARED
     core/Engine.cpp
     scene/RenderScene.cpp
+    physics/PhysicsWorld.cpp
     rendering/Shader.cpp
     rendering/Texture.cpp
     rendering/SpriteBatch.cpp

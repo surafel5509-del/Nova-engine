@@ -48,10 +48,13 @@ import androidx.compose.ui.unit.dp
 import dev.nova.editor.editor.EditorTool
 import dev.nova.editor.editor.EditorViewModel
 import dev.nova.editor.editor.LogLevel
+import dev.nova.editor.editor.PlayState
 import dev.nova.editor.project.ProjectRepository
 import dev.nova.editor.ui.theme.NovaColors
 
-private enum class BottomTab(val label: String) { HIERARCHY("Hierarchy"), INSPECTOR("Inspector"), CONSOLE("Console") }
+private enum class BottomTab(val label: String) {
+    HIERARCHY("Hierarchy"), INSPECTOR("Inspector"), ASSETS("Assets"), CONSOLE("Console")
+}
 
 /**
  * Main editor shell: toolbar + hierarchy + viewport + inspector + console.
@@ -138,6 +141,7 @@ fun EditorScreen(
                     when (bottomTab) {
                         BottomTab.HIERARCHY -> HierarchyPanel(viewModel)
                         BottomTab.INSPECTOR -> InspectorPanel(viewModel, importTexture)
+                        BottomTab.ASSETS -> AssetBrowserPanel(viewModel)
                         BottomTab.CONSOLE -> ConsolePanel(viewModel)
                     }
                 }
@@ -151,6 +155,7 @@ private fun EditorToolbar(
     viewModel: EditorViewModel,
     onBack: () -> Unit,
 ) {
+    val context = LocalContext.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -203,12 +208,43 @@ private fun EditorToolbar(
 
         VerticalDivider(modifier = Modifier.height(24.dp), color = NovaColors.PanelBorder)
 
-        // Play mode arrives in Phase 4; shown disabled to make that explicit.
-        TextButton(onClick = {}, enabled = false) { Text("Play (Phase 4)") }
-        TextButton(onClick = {}, enabled = false) { Text("Pause") }
-        TextButton(onClick = {}, enabled = false) { Text("Stop") }
+        // Play mode controls (functional).
+        TextButton(
+            onClick = { viewModel.play() },
+            enabled = viewModel.playState != PlayState.PLAYING,
+        ) { Text(if (viewModel.playState == PlayState.PAUSED) "Resume" else "Play") }
+        TextButton(
+            onClick = { viewModel.pause() },
+            enabled = viewModel.playState == PlayState.PLAYING,
+        ) { Text("Pause") }
+        TextButton(
+            onClick = { viewModel.stop() },
+            enabled = viewModel.playState != PlayState.STOPPED,
+        ) { Text("Stop") }
 
         VerticalDivider(modifier = Modifier.height(24.dp), color = NovaColors.PanelBorder)
+
+        FilterChip(
+            selected = viewModel.gameView,
+            onClick = { viewModel.toggleGameView() },
+            label = { Text("Game", style = MaterialTheme.typography.labelSmall) },
+            modifier = Modifier.padding(horizontal = 2.dp),
+        )
+        FilterChip(
+            selected = viewModel.physicsDebug,
+            onClick = { viewModel.togglePhysicsDebug() },
+            label = { Text("Physics", style = MaterialTheme.typography.labelSmall) },
+            modifier = Modifier.padding(horizontal = 2.dp),
+        )
+
+        VerticalDivider(modifier = Modifier.height(24.dp), color = NovaColors.PanelBorder)
+        TextButton(onClick = {
+            // Save first so the runtime loads the latest scene.
+            viewModel.save()
+            val intent = android.content.Intent(context, dev.nova.editor.runtime.GameActivity::class.java)
+                .putExtra(dev.nova.editor.runtime.GameActivity.EXTRA_PROJECT_PATH, viewModel.projectPath)
+            context.startActivity(intent)
+        }) { Text("Run ▶") }
         TextButton(onClick = {}, enabled = false) { Text("Build (Phase 5)") }
     }
 }
@@ -228,6 +264,14 @@ private fun handleShortcut(
         event.key == Key.Delete -> { viewModel.selectedId?.let(viewModel::deleteEntity); return true }
         event.key == Key.W -> { viewModel.setTool(EditorTool.MOVE); return true }
         event.key == Key.Q -> { viewModel.setTool(EditorTool.SELECT); return true }
+        event.key == Key.G -> { viewModel.toggleGameView(); return true }
+        event.key == Key.Spacebar -> {
+            when (viewModel.playState) {
+                PlayState.PLAYING -> viewModel.pause()
+                else -> viewModel.play()
+            }
+            return true
+        }
     }
     return false
 }

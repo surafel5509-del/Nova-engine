@@ -16,8 +16,8 @@ const val PROJECT_FORMAT_VERSION = 1
 enum class ProjectTemplate(val label: String, val implemented: Boolean) {
     EMPTY("Empty 2D", true),
     PLATFORMER("Platformer", true),
-    RPG("RPG", false),        // Phase 2+
-    ARCADE("Arcade", false),  // Phase 2+
+    RPG("RPG", true),
+    ARCADE("Arcade", true),
 }
 
 enum class ProjectOrientation(val label: String) { PORTRAIT("Portrait"), LANDSCAPE("Landscape") }
@@ -150,6 +150,15 @@ class ProjectRepository(private val rootDir: File) {
         return if (file.exists()) file.readBytes() else null
     }
 
+    /** Loads config + scene from an explicit project directory (no recents update). */
+    fun loadProjectScene(projectPath: String): Pair<ProjectConfig, Scene> {
+        val dir = File(projectPath)
+        val config = SceneJson.decodeFromString<ProjectConfig>(File(dir, PROJECT_FILE).readText())
+        val sceneFile = File(dir, "scenes/main.scene.json")
+        val scene = dev.nova.editor.scene.deserializeScene(sceneFile.readText())
+        return config to scene
+    }
+
     private fun uniqueProjectDir(name: String): File {
         val slug = name.trim().lowercase()
             .replace(Regex("[^a-z0-9]+"), "-")
@@ -174,6 +183,9 @@ class ProjectRepository(private val rootDir: File) {
                 SceneOps.createEntity(EntityKind.SPRITE, "Ground").copy(
                     transform = TransformComponent(x = 0f, y = -2.5f),
                     sprite = SpriteComponent(width = 12f, height = 1f, r = 0.35f, g = 0.45f, b = 0.38f),
+                    physicsBody = dev.nova.editor.scene.PhysicsBodyComponent(
+                        bodyType = "static", colliderWidth = 12f, colliderHeight = 1f,
+                    ),
                 ),
             )
             scene = SceneOps.add(
@@ -181,6 +193,53 @@ class ProjectRepository(private val rootDir: File) {
                 SceneOps.createEntity(EntityKind.PHYSICS_BODY, "Player").copy(
                     transform = TransformComponent(x = 0f, y = 0f),
                     sprite = SpriteComponent(width = 1f, height = 1f, r = 0.3f, g = 0.7f, b = 0.95f),
+                    physicsBody = dev.nova.editor.scene.PhysicsBodyComponent(
+                        bodyType = "dynamic", colliderWidth = 1f, colliderHeight = 1f,
+                    ),
+                ),
+            )
+            scene
+        }
+        ProjectTemplate.RPG -> {
+            var scene = Scene(name = "Main")
+            scene = SceneOps.add(scene, SceneOps.createEntity(EntityKind.CAMERA, "Main Camera"))
+            scene = SceneOps.add(
+                scene,
+                SceneOps.createEntity(EntityKind.SPRITE, "Hero").copy(
+                    transform = TransformComponent(x = 0f, y = 0f),
+                    sprite = SpriteComponent(width = 1f, height = 1f, r = 0.85f, g = 0.75f, b = 0.4f),
+                    animator = dev.nova.editor.scene.AnimatorComponent(frameCols = 4, frameRows = 1),
+                ),
+            )
+            scene = SceneOps.add(
+                scene,
+                SceneOps.createEntity(EntityKind.PARTICLE_SYSTEM, "Torch").copy(
+                    transform = TransformComponent(x = 2f, y = 1f),
+                ),
+            )
+            scene
+        }
+        ProjectTemplate.ARCADE -> {
+            var scene = Scene(name = "Main")
+            scene = SceneOps.add(scene, SceneOps.createEntity(EntityKind.CAMERA, "Main Camera"))
+            scene = SceneOps.add(
+                scene,
+                SceneOps.createEntity(EntityKind.PHYSICS_BODY, "Ball").copy(
+                    transform = TransformComponent(x = 0f, y = 2f),
+                    sprite = SpriteComponent(width = 0.6f, height = 0.6f, r = 0.95f, g = 0.4f, b = 0.4f),
+                    physicsBody = dev.nova.editor.scene.PhysicsBodyComponent(
+                        bodyType = "dynamic", restitution = 0.8f, colliderWidth = 0.6f, colliderHeight = 0.6f,
+                    ),
+                ),
+            )
+            scene = SceneOps.add(
+                scene,
+                SceneOps.createEntity(EntityKind.SPRITE, "Floor").copy(
+                    transform = TransformComponent(x = 0f, y = -2f),
+                    sprite = SpriteComponent(width = 10f, height = 0.5f, r = 0.4f, g = 0.4f, b = 0.5f),
+                    physicsBody = dev.nova.editor.scene.PhysicsBodyComponent(
+                        bodyType = "static", colliderWidth = 10f, colliderHeight = 0.5f,
+                    ),
                 ),
             )
             scene

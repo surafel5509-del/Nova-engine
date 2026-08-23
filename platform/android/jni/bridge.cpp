@@ -105,4 +105,58 @@ Java_dev_nova_editor_bridge_NativeEngine_nativeRemoveTexture(JNIEnv* env, jobjec
     }
 }
 
+// ---- Simulation ----
+
+JNIEXPORT void JNICALL
+Java_dev_nova_editor_bridge_NativeEngine_nativeStartSimulation(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
+    if (auto* e = fromHandle(handle)) e->startSimulation();
+}
+
+JNIEXPORT void JNICALL
+Java_dev_nova_editor_bridge_NativeEngine_nativeStopSimulation(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
+    if (auto* e = fromHandle(handle)) e->stopSimulation();
+}
+
+JNIEXPORT void JNICALL
+Java_dev_nova_editor_bridge_NativeEngine_nativeStepSimulation(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle, jfloat dt) {
+    if (auto* e = fromHandle(handle)) e->stepSimulation(dt);
+}
+
+JNIEXPORT jstring JNICALL
+Java_dev_nova_editor_bridge_NativeEngine_nativeSnapshotPositions(JNIEnv* env, jobject /*thiz*/, jlong handle) {
+    if (auto* e = fromHandle(handle)) {
+        return env->NewStringUTF(e->snapshotPositionsJson().c_str());
+    }
+    return env->NewStringUTF("{}");
+}
+
+// ---- Game view / runtime ----
+
+JNIEXPORT void JNICALL
+Java_dev_nova_editor_bridge_NativeEngine_nativeSetUseGameCamera(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle, jboolean use) {
+    if (auto* e = fromHandle(handle)) e->setUseGameCamera(use == JNI_TRUE);
+}
+
+JNIEXPORT void JNICALL
+Java_dev_nova_editor_bridge_NativeEngine_nativeSetShowGameCamera(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle, jboolean show) {
+    if (auto* e = fromHandle(handle)) e->setShowGameCamera(show == JNI_TRUE);
+}
+
+JNIEXPORT void JNICALL
+Java_dev_nova_editor_bridge_NativeEngine_nativeSetShowPhysicsDebug(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle, jboolean show) {
+    if (auto* e = fromHandle(handle)) e->setShowPhysicsDebug(show == JNI_TRUE);
+}
+
+// ---- Input ----
+
+JNIEXPORT void JNICALL
+Java_dev_nova_editor_bridge_NativeEngine_nativeSetInputAxis(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle, jfloat x, jfloat y) {
+    if (auto* e = fromHandle(handle)) e->setInputAxis(x, y);
+}
+
+JNIEXPORT void JNICALL
+Java_dev_nova_editor_bridge_NativeEngine_nativeSetInputJump(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle, jboolean pressed) {
+    if (auto* e = fromHandle(handle)) e->setInputJump(pressed == JNI_TRUE);
+}
+
 } // extern "C"

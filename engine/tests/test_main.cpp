@@ -97,12 +97,17 @@ void testQuadCorners() {
 
 } // namespace
 
+int runPhysicsTests();
+
 int main() {
     testSceneParsing();
     testSceneParsingErrors();
     testMat4();
     testQuadCorners();
 
-    std::printf("%d checks, %d failures\n", checks, failures);
-    return failures == 0 ? 0 : 1;
+    std::printf("scene/math: %d checks, %d failures\n", checks, failures);
+    const int physicsFailures = runPhysicsTests();
+    const int total = failures + physicsFailures;
+    std::printf("TOTAL: %d failures\n", total);
+    return total == 0 ? 0 : 1;
 }

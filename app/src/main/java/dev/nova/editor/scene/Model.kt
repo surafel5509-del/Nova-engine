@@ -28,11 +28,14 @@ data class SpriteComponent(
     val flipX: Boolean = false,
     val flipY: Boolean = false,
     val sortingOrder: Int = 0,
+    val parallaxFactor: Float = 1f,    // 1 = moves with world, 0 = fixed to camera
 )
 
 @Serializable
 data class CameraComponent(
     val zoom: Float = 100f,            // pixels per world unit
+    val frustumWidth: Float = 10f,     // preview frame extents (world units)
+    val frustumHeight: Float = 6f,
     val backgroundR: Float = 0.09f,
     val backgroundG: Float = 0.10f,
     val backgroundB: Float = 0.13f,
@@ -45,9 +48,38 @@ data class PhysicsBodyComponent(
     val gravityScale: Float = 1f,
     val friction: Float = 0.5f,
     val restitution: Float = 0f,
+    val colliderShape: String = "box", // box | circle (circle approximated as box)
+    val colliderWidth: Float = 1f,     // world units; defaults match sprite size
+    val colliderHeight: Float = 1f,
+    val isSensor: Boolean = false,
 )
 
-enum class EntityKind { EMPTY, SPRITE, CAMERA, PHYSICS_BODY }
+/** Sprite-sheet animation over a grid of frames in the sprite's texture. */
+@Serializable
+data class AnimatorComponent(
+    val frameCols: Int = 1,
+    val frameRows: Int = 1,
+    val framesPerSecond: Float = 8f,
+    val loop: Boolean = true,
+    val playing: Boolean = true,
+)
+
+/** CPU-simulated particle emitter (rendered as small sprites). */
+@Serializable
+data class ParticleEmitterComponent(
+    val emissionRate: Float = 20f,     // particles per second
+    val lifetime: Float = 1.5f,        // seconds
+    val speed: Float = 3f,
+    val spreadDegrees: Float = 360f,   // emission cone
+    val gravity: Float = 0f,
+    val startSize: Float = 0.2f,
+    val endSize: Float = 0.05f,
+    val startR: Float = 1f, val startG: Float = 0.8f, val startB: Float = 0.3f,
+    val endR: Float = 1f, val endG: Float = 0.2f, val endB: Float = 0.1f,
+    val maxParticles: Int = 100,
+)
+
+enum class EntityKind { EMPTY, SPRITE, CAMERA, PHYSICS_BODY, ANIMATED_SPRITE, PARTICLE_SYSTEM }
 
 /**
  * Immutable editor entity. Components are nullable; presence = attached.
@@ -64,13 +96,16 @@ data class Entity(
     val sprite: SpriteComponent? = null,
     val camera: CameraComponent? = null,
     val physicsBody: PhysicsBodyComponent? = null,
+    val animator: AnimatorComponent? = null,
+    val particles: ParticleEmitterComponent? = null,
 ) {
     val kind: EntityKind
         get() = when {
             camera != null -> EntityKind.CAMERA
-            sprite != null && physicsBody != null -> EntityKind.PHYSICS_BODY
-            sprite != null -> EntityKind.SPRITE
+            particles != null -> EntityKind.PARTICLE_SYSTEM
+            animator != null -> EntityKind.ANIMATED_SPRITE
             physicsBody != null -> EntityKind.PHYSICS_BODY
+            sprite != null -> EntityKind.SPRITE
             else -> EntityKind.EMPTY
         }
 }
@@ -95,6 +130,14 @@ object SceneOps {
                 sprite = SpriteComponent(r = 0.4f, g = 0.8f, b = 0.4f),
                 physicsBody = PhysicsBodyComponent(bodyType = "dynamic"),
             )
+            EntityKind.ANIMATED_SPRITE -> base.copy(
+                sprite = SpriteComponent(r = 0.9f, g = 0.6f, b = 0.95f),
+                animator = AnimatorComponent(frameCols = 4, frameRows = 1),
+            )
+            EntityKind.PARTICLE_SYSTEM -> base.copy(
+                sprite = SpriteComponent(width = 0.3f, height = 0.3f, r = 1f, g = 0.7f, b = 0.3f),
+                particles = ParticleEmitterComponent(),
+            )
         }
     }
 
@@ -103,6 +146,8 @@ object SceneOps {
         EntityKind.SPRITE -> "Sprite"
         EntityKind.CAMERA -> "Camera"
         EntityKind.PHYSICS_BODY -> "Body"
+        EntityKind.ANIMATED_SPRITE -> "Animated Sprite"
+        EntityKind.PARTICLE_SYSTEM -> "Particles"
     }
 
     fun add(scene: Scene, entity: Entity): Scene {
@@ -253,13 +298,52 @@ data class RenderSprite(
     val a: Float,
     val texture: String? = null,
     val selected: Boolean = false,
+    val sortingOrder: Int = 0,
+    val parallaxFactor: Float = 1f,
+    val frameCols: Int = 1,
+    val frameRows: Int = 1,
+    val frameIndex: Int = 0,
+)
+
+@Serializable
+data class RenderBody(
+    val id: String,
+    val bodyType: Int,                 // 0 static, 1 dynamic, 2 kinematic
+    val x: Float,
+    val y: Float,
+    val halfW: Float,
+    val halfH: Float,
+    val mass: Float,
+    val gravityScale: Float,
+    val friction: Float,
+    val restitution: Float,
+)
+
+@Serializable
+data class RenderGameCamera(
+    val x: Float,
+    val y: Float,
+    val zoom: Float,
+    val width: Float,
+    val height: Float,
+    val bgR: Float,
+    val bgG: Float,
+    val bgB: Float,
 )
 
 @Serializable
 data class RenderScene(
     val version: Int = SCENE_FORMAT_VERSION,
     val sprites: List<RenderSprite>,
+    val bodies: List<RenderBody> = emptyList(),
+    val gameCamera: RenderGameCamera? = null,
 )
+
+private fun bodyTypeToInt(type: String): Int = when (type) {
+    "dynamic" -> 1
+    "kinematic" -> 2
+    else -> 0
+}
 
 /** Build the flat render scene: only enabled entities with sprites, sorted. */
 fun buildRenderScene(scene: Scene, selectedId: String?): RenderScene {
@@ -269,6 +353,7 @@ fun buildRenderScene(scene: Scene, selectedId: String?): RenderScene {
         .map { e ->
             val wt = SceneOps.worldTransform(scene, e.id)
             val s = e.sprite!!
+            val anim = e.animator
             RenderSprite(
                 id = e.id,
                 x = wt.x, y = wt.y, rotation = wt.rotation,
@@ -277,9 +362,46 @@ fun buildRenderScene(scene: Scene, selectedId: String?): RenderScene {
                 r = s.r, g = s.g, b = s.b, a = s.a,
                 texture = s.texturePath,
                 selected = e.id == selectedId,
+                sortingOrder = s.sortingOrder,
+                parallaxFactor = s.parallaxFactor,
+                frameCols = anim?.frameCols ?: 1,
+                frameRows = anim?.frameRows ?: 1,
+                frameIndex = 0,
             )
         }
-    return RenderScene(sprites = sprites)
+
+    val bodies = scene.entities
+        .filter { it.enabled && it.physicsBody != null && isChainEnabled(scene, it) }
+        .map { e ->
+            val wt = SceneOps.worldTransform(scene, e.id)
+            val p = e.physicsBody!!
+            val s = e.sprite
+            val hw = (if (p.colliderWidth > 0f) p.colliderWidth else s?.width ?: 1f) * wt.scaleX / 2f
+            val hh = (if (p.colliderHeight > 0f) p.colliderHeight else s?.height ?: 1f) * wt.scaleY / 2f
+            RenderBody(
+                id = e.id,
+                bodyType = bodyTypeToInt(p.bodyType),
+                x = wt.x, y = wt.y,
+                halfW = hw, halfH = hh,
+                mass = p.mass,
+                gravityScale = p.gravityScale,
+                friction = p.friction,
+                restitution = p.restitution,
+            )
+        }
+
+    val cameraEntity = scene.entities.firstOrNull { it.enabled && it.camera != null }
+    val gameCamera = cameraEntity?.let { e ->
+        val wt = SceneOps.worldTransform(scene, e.id)
+        val c = e.camera!!
+        RenderGameCamera(
+            x = wt.x, y = wt.y, zoom = c.zoom,
+            width = c.frustumWidth, height = c.frustumHeight,
+            bgR = c.backgroundR, bgG = c.backgroundG, bgB = c.backgroundB,
+        )
+    }
+
+    return RenderScene(sprites = sprites, bodies = bodies, gameCamera = gameCamera)
 }
 
 private fun isChainEnabled(scene: Scene, entity: Entity): Boolean {

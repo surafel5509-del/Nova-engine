@@ -29,4 +29,19 @@ object NativeEngine {
     /** Uploads an RGBA8888 texture keyed by [key] (usually the project-relative path). */
     external fun nativeLoadTexture(handle: Long, key: String, rgba: ByteArray, width: Int, height: Int)
     external fun nativeRemoveTexture(handle: Long, key: String)
+
+    // ---- Simulation (Play mode / runtime) ----
+    external fun nativeStartSimulation(handle: Long)
+    external fun nativeStopSimulation(handle: Long)
+    external fun nativeStepSimulation(handle: Long, dt: Float)
+    external fun nativeSnapshotPositions(handle: Long): String
+
+    // ---- Game view / runtime ----
+    external fun nativeSetUseGameCamera(handle: Long, use: Boolean)
+    external fun nativeSetShowGameCamera(handle: Long, show: Boolean)
+    external fun nativeSetShowPhysicsDebug(handle: Long, show: Boolean)
+
+    // ---- Input (runtime) ----
+    external fun nativeSetInputAxis(handle: Long, x: Float, y: Float)
+    external fun nativeSetInputJump(handle: Long, pressed: Boolean)
 }

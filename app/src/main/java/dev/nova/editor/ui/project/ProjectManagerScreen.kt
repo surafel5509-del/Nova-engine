@@ -221,6 +221,11 @@ private fun CreateProjectDialog(
 
                 Text("Template", style = MaterialTheme.typography.labelMedium, color = NovaColors.TextDim)
                 TemplateDropdown(template) { template = it }
+                Text(
+                    templateDescription(template),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = NovaColors.TextDim,
+                )
             }
         },
         confirmButton = {
@@ -255,6 +260,13 @@ private fun TemplateDropdown(selected: ProjectTemplate, onSelected: (ProjectTemp
             }
         }
     }
+}
+
+private fun templateDescription(template: ProjectTemplate): String = when (template) {
+    ProjectTemplate.EMPTY -> "Blank scene with a camera."
+    ProjectTemplate.PLATFORMER -> "Static ground + dynamic player. Press Play to watch it fall and land."
+    ProjectTemplate.RPG -> "Animated hero (sprite-sheet) + particle torch. Press Play to animate."
+    ProjectTemplate.ARCADE -> "Bouncy ball + floor. Press Play to watch it bounce."
 }
 
 private fun formatEpoch(epochMs: Long): String =

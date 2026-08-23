@@ -22,6 +22,12 @@ std::string getString(const nlohmann::json& j, const char* key, const std::strin
     if (it == j.end() || !it->is_string()) return fallback;
     return it->get<std::string>();
 }
+
+int getInt(const nlohmann::json& j, const char* key, int fallback) {
+    auto it = j.find(key);
+    if (it == j.end() || !it->is_number()) return fallback;
+    return it->get<int>();
+}
 } // namespace
 
 bool RenderScene::parseFrom(const std::string& jsonText, std::string* outError) {
@@ -58,7 +64,43 @@ bool RenderScene::parseFrom(const std::string& jsonText, std::string* outError) 
         s.a = getFloat(js, "a", 1.0f);
         s.texture = getString(js, "texture", "");
         s.selected = getBool(js, "selected", false);
+        s.sortingOrder = getInt(js, "sortingOrder", 0);
+        s.parallaxFactor = getFloat(js, "parallaxFactor", 1.0f);
+        s.frameCols = getInt(js, "frameCols", 1);
+        s.frameRows = getInt(js, "frameRows", 1);
+        s.frameIndex = getInt(js, "frameIndex", 0);
         next.sprites.push_back(std::move(s));
+    }
+
+    if (root.contains("bodies") && root["bodies"].is_array()) {
+        for (const auto& jb : root["bodies"]) {
+            if (!jb.is_object()) continue;
+            BodyRecord b;
+            b.id = getString(jb, "id", "");
+            b.bodyType = getInt(jb, "bodyType", 0);
+            b.x = getFloat(jb, "x", 0.0f);
+            b.y = getFloat(jb, "y", 0.0f);
+            b.halfW = getFloat(jb, "halfW", 0.5f);
+            b.halfH = getFloat(jb, "halfH", 0.5f);
+            b.mass = getFloat(jb, "mass", 1.0f);
+            b.gravityScale = getFloat(jb, "gravityScale", 1.0f);
+            b.friction = getFloat(jb, "friction", 0.5f);
+            b.restitution = getFloat(jb, "restitution", 0.0f);
+            next.bodies.push_back(std::move(b));
+        }
+    }
+
+    if (root.contains("gameCamera") && root["gameCamera"].is_object()) {
+        const auto& jc = root["gameCamera"];
+        next.gameCamera.present = true;
+        next.gameCamera.x = getFloat(jc, "x", 0.0f);
+        next.gameCamera.y = getFloat(jc, "y", 0.0f);
+        next.gameCamera.zoom = getFloat(jc, "zoom", 100.0f);
+        next.gameCamera.width = getFloat(jc, "width", 10.0f);
+        next.gameCamera.height = getFloat(jc, "height", 6.0f);
+        next.gameCamera.bgR = getFloat(jc, "bgR", 0.09f);
+        next.gameCamera.bgG = getFloat(jc, "bgG", 0.10f);
+        next.gameCamera.bgB = getFloat(jc, "bgB", 0.13f);
     }
 
     *this = std::move(next);

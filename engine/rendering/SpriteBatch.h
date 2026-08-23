@@ -26,6 +26,9 @@ public:
     /** Draws one sprite with [texture]; texture 0 binds the white fallback. */
     void drawSprite(const SpriteInstance& sprite, GLuint texture, GLuint whiteTexture);
     void drawSelectionOutline(const SpriteInstance& sprite, GLuint whiteTexture);
+    /** Draws a colored rotated box outline (for camera frame / physics debug). */
+    void drawLineBox(float cx, float cy, float halfW, float halfH, float rotationDeg,
+                     float r, float g, float b, float a, GLuint whiteTexture);
     void endFrame();
 
 private:

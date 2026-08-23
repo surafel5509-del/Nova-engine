@@ -9,7 +9,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_executable(nova_tests
     test_main.cpp
+    test_physics.cpp
     ../scene/RenderScene.cpp
+    ../physics/PhysicsWorld.cpp
 )
 
 target_include_directories(nova_tests PRIVATE
