@@ -77,6 +77,7 @@ void SpriteBatch::beginFrame(const Mat4& viewProj) {
     viewProj_ = viewProj;
     vertices_.clear();
     currentTexture_ = 0;
+    drawCalls_ = 0;
 }
 
 void SpriteBatch::drawSprite(const SpriteInstance& sprite, GLuint texture, GLuint whiteTexture) {
@@ -163,6 +164,7 @@ void SpriteBatch::drawLineBox(float cx, float cy, float halfW, float halfH, floa
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(outline), outline);
     glDrawArrays(GL_LINE_STRIP, 0, 5);
     glBindVertexArray(0);
+    ++drawCalls_;
 }
 
 void SpriteBatch::endFrame() {
@@ -184,6 +186,7 @@ void SpriteBatch::flush() {
     glBindVertexArray(0);
     vertices_.clear();
     currentTexture_ = 0;
+    ++drawCalls_;
 }
 
 } // namespace nova

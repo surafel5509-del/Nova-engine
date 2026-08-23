@@ -12,3 +12,5 @@ app/build/
 build-host/
 *.apk
 *.aab
+game/build/
+.kotlin/

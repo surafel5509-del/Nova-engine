@@ -13,3 +13,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "NovaEngine"
 include(":app")
+include(":game")

@@ -79,7 +79,61 @@ data class ParticleEmitterComponent(
     val maxParticles: Int = 100,
 )
 
-enum class EntityKind { EMPTY, SPRITE, CAMERA, PHYSICS_BODY, ANIMATED_SPRITE, PARTICLE_SYSTEM }
+/** Grid of tile indices into a tileset atlas. -1 = empty cell. Row-major, row 0 = bottom. */
+@Serializable
+data class TilemapComponent(
+    val tilesetPath: String? = null,   // atlas texture, project-relative
+    val tileSize: Float = 1f,          // world units per cell
+    val cols: Int = 16,
+    val rows: Int = 9,
+    val tilesetCols: Int = 8,          // atlas grid
+    val tilesetRows: Int = 4,
+    val tiles: List<Int> = List(cols * rows) { -1 },
+) {
+    fun tileAt(col: Int, row: Int): Int =
+        if (col in 0 until cols && row in 0 until rows) tiles[row * cols + col] else -1
+
+    fun withTile(col: Int, row: Int, value: Int): TilemapComponent {
+        if (col !in 0 until cols || row !in 0 until rows) return this
+        val next = tiles.toMutableList()
+        // Tolerate shorter lists (older scenes).
+        while (next.size < cols * rows) next.add(-1)
+        next[row * cols + col] = value
+        return copy(tiles = next)
+    }
+
+    fun resized(newCols: Int, newRows: Int): TilemapComponent {
+        val next = MutableList(newCols * newRows) { -1 }
+        for (r in 0 until minOf(rows, newRows)) {
+            for (c in 0 until minOf(cols, newCols)) {
+                next[r * newCols + c] = tileAt(c, r)
+            }
+        }
+        return copy(cols = newCols, rows = newRows, tiles = next)
+    }
+}
+
+/** Audio source: SFX (preloaded) or music (streamed). Playback runs in Play/runtime. */
+@Serializable
+data class AudioSourceComponent(
+    val audioPath: String? = null,     // project-relative wav/ogg/mp3
+    val volume: Float = 1f,
+    val pitch: Float = 1f,
+    val loop: Boolean = false,
+    val autoplay: Boolean = false,
+    val music: Boolean = false,
+)
+
+/** Lua script bound to this entity. Source lives in the project's scripts/ dir. */
+@Serializable
+data class ScriptComponent(
+    val scriptPath: String = "scripts/main.lua",  // project-relative .lua file
+)
+
+enum class EntityKind {
+    EMPTY, SPRITE, CAMERA, PHYSICS_BODY, ANIMATED_SPRITE, PARTICLE_SYSTEM,
+    TILEMAP, AUDIO_SOURCE,
+}
 
 /**
  * Immutable editor entity. Components are nullable; presence = attached.
@@ -98,10 +152,15 @@ data class Entity(
     val physicsBody: PhysicsBodyComponent? = null,
     val animator: AnimatorComponent? = null,
     val particles: ParticleEmitterComponent? = null,
+    val tilemap: TilemapComponent? = null,
+    val audioSource: AudioSourceComponent? = null,
+    val script: ScriptComponent? = null,
 ) {
     val kind: EntityKind
         get() = when {
             camera != null -> EntityKind.CAMERA
+            tilemap != null -> EntityKind.TILEMAP
+            audioSource != null && sprite == null -> EntityKind.AUDIO_SOURCE
             particles != null -> EntityKind.PARTICLE_SYSTEM
             animator != null -> EntityKind.ANIMATED_SPRITE
             physicsBody != null -> EntityKind.PHYSICS_BODY
@@ -138,6 +197,8 @@ object SceneOps {
                 sprite = SpriteComponent(width = 0.3f, height = 0.3f, r = 1f, g = 0.7f, b = 0.3f),
                 particles = ParticleEmitterComponent(),
             )
+            EntityKind.TILEMAP -> base.copy(tilemap = TilemapComponent())
+            EntityKind.AUDIO_SOURCE -> base.copy(audioSource = AudioSourceComponent())
         }
     }
 
@@ -148,6 +209,8 @@ object SceneOps {
         EntityKind.PHYSICS_BODY -> "Body"
         EntityKind.ANIMATED_SPRITE -> "Animated Sprite"
         EntityKind.PARTICLE_SYSTEM -> "Particles"
+        EntityKind.TILEMAP -> "Tilemap"
+        EntityKind.AUDIO_SOURCE -> "Audio Source"
     }
 
     fun add(scene: Scene, entity: Entity): Scene {
@@ -332,11 +395,64 @@ data class RenderGameCamera(
 )
 
 @Serializable
+data class RenderEmitter(
+    val id: String,
+    val x: Float,
+    val y: Float,
+    val emissionRate: Float,
+    val lifetime: Float,
+    val speed: Float,
+    val gravity: Float,
+    val startSize: Float,
+    val endSize: Float,
+    val spread: Float,               // radians
+    val direction: Float,            // radians
+    val r: Float,
+    val g: Float,
+    val b: Float,
+)
+
+@Serializable
+data class RenderTilemap(
+    val id: String,
+    val x: Float,
+    val y: Float,
+    val tileSize: Float,
+    val cols: Int,
+    val rows: Int,
+    val tileset: String? = null,
+    val tilesetCols: Int = 1,
+    val tilesetRows: Int = 1,
+    val tiles: List<Int>,
+)
+
+@Serializable
+data class RenderAudioSource(
+    val id: String,
+    val path: String,
+    val volume: Float,
+    val pitch: Float,
+    val loop: Boolean,
+    val autoplay: Boolean,
+    val music: Boolean,
+)
+
+@Serializable
+data class RenderScript(
+    val id: String,
+    val script: String,
+)
+
+@Serializable
 data class RenderScene(
     val version: Int = SCENE_FORMAT_VERSION,
     val sprites: List<RenderSprite>,
     val bodies: List<RenderBody> = emptyList(),
     val gameCamera: RenderGameCamera? = null,
+    val emitters: List<RenderEmitter> = emptyList(),
+    val tilemaps: List<RenderTilemap> = emptyList(),
+    val audioSources: List<RenderAudioSource> = emptyList(),
+    val scripts: List<RenderScript> = emptyList(),
 )
 
 private fun bodyTypeToInt(type: String): Int = when (type) {
@@ -401,7 +517,71 @@ fun buildRenderScene(scene: Scene, selectedId: String?): RenderScene {
         )
     }
 
-    return RenderScene(sprites = sprites, bodies = bodies, gameCamera = gameCamera)
+    val emitters = scene.entities
+        .filter { it.enabled && it.particles != null && isChainEnabled(scene, it) }
+        .map { e ->
+            val wt = SceneOps.worldTransform(scene, e.id)
+            val p = e.particles!!
+            RenderEmitter(
+                id = e.id,
+                x = wt.x, y = wt.y,
+                emissionRate = p.emissionRate,
+                lifetime = p.lifetime,
+                speed = p.speed,
+                gravity = p.gravity,
+                startSize = p.startSize,
+                endSize = p.endSize,
+                spread = Math.toRadians(p.spreadDegrees.toDouble()).toFloat() / 2f,
+                direction = (Math.PI / 2).toFloat(),
+                r = p.startR, g = p.startG, b = p.startB,
+            )
+        }
+
+    val tilemaps = scene.entities
+        .filter { it.enabled && it.tilemap != null && isChainEnabled(scene, it) }
+        .map { e ->
+            val wt = SceneOps.worldTransform(scene, e.id)
+            val t = e.tilemap!!
+            RenderTilemap(
+                id = e.id,
+                x = wt.x, y = wt.y,
+                tileSize = t.tileSize,
+                cols = t.cols, rows = t.rows,
+                tileset = t.tilesetPath,
+                tilesetCols = t.tilesetCols,
+                tilesetRows = t.tilesetRows,
+                tiles = t.tiles,
+            )
+        }
+
+    val audioSources = scene.entities
+        .filter { it.enabled && it.audioSource != null && it.audioSource!!.audioPath != null && isChainEnabled(scene, it) }
+        .map { e ->
+            val a = e.audioSource!!
+            RenderAudioSource(
+                id = e.id,
+                path = a.audioPath!!,
+                volume = a.volume,
+                pitch = a.pitch,
+                loop = a.loop,
+                autoplay = a.autoplay,
+                music = a.music,
+            )
+        }
+
+    val scripts = scene.entities
+        .filter { it.enabled && it.script != null && isChainEnabled(scene, it) }
+        .map { e -> RenderScript(id = e.id, script = e.script!!.scriptPath) }
+
+    return RenderScene(
+        sprites = sprites,
+        bodies = bodies,
+        gameCamera = gameCamera,
+        emitters = emitters,
+        tilemaps = tilemaps,
+        audioSources = audioSources,
+        scripts = scripts,
+    )
 }
 
 private fun isChainEnabled(scene: Scene, entity: Entity): Boolean {

@@ -232,6 +232,91 @@ fun InspectorPanel(
             HorizontalDivider(color = NovaColors.PanelBorder)
         }
 
+        // --- Tilemap ---
+        selected.tilemap?.let { map ->
+            ComponentHeader(
+                title = "Tilemap",
+                onReset = { viewModel.updateEntity(selected.id, "Reset Tilemap") { it.copy(tilemap = dev.nova.editor.scene.TilemapComponent()) } },
+                onRemove = { viewModel.updateEntity(selected.id, "Remove Tilemap component") { it.copy(tilemap = null) } },
+            )
+            FloatField("Tile size", map.tileSize) { v -> viewModel.updateEntity(selected.id, "Edit tile size") { e -> e.copy(tilemap = e.tilemap?.copy(tileSize = v.coerceAtLeast(0.1f))) } }
+            FloatField("Columns", map.cols.toFloat()) { v -> viewModel.updateEntity(selected.id, "Resize tilemap") { e -> e.copy(tilemap = e.tilemap?.resized(v.toInt().coerceAtLeast(1), e.tilemap.rows)) } }
+            FloatField("Rows", map.rows.toFloat()) { v -> viewModel.updateEntity(selected.id, "Resize tilemap") { e -> e.copy(tilemap = e.tilemap?.resized(e.tilemap.cols, v.toInt().coerceAtLeast(1))) } }
+            FloatField("Tileset columns", map.tilesetCols.toFloat()) { v -> viewModel.updateEntity(selected.id, "Edit tileset grid") { e -> e.copy(tilemap = e.tilemap?.copy(tilesetCols = v.toInt().coerceAtLeast(1))) } }
+            FloatField("Tileset rows", map.tilesetRows.toFloat()) { v -> viewModel.updateEntity(selected.id, "Edit tileset grid") { e -> e.copy(tilemap = e.tilemap?.copy(tilesetRows = v.toInt().coerceAtLeast(1))) } }
+            Text(
+                "Tileset: ${map.tilesetPath ?: "(none — colored selection)"}",
+                style = MaterialTheme.typography.bodySmall,
+                color = NovaColors.TextDim,
+            )
+            Text(
+                "Paint with the Tile tool. Brush index: ${viewModel.tileBrush}",
+                style = MaterialTheme.typography.bodySmall,
+                color = NovaColors.TextDim,
+            )
+            FloatField("Brush tile index", viewModel.tileBrush.toFloat()) { v ->
+                viewModel.tileBrush = v.toInt().coerceAtLeast(0)
+            }
+            Spacer(Modifier.height(8.dp))
+            HorizontalDivider(color = NovaColors.PanelBorder)
+        }
+
+        // --- Audio source ---
+        selected.audioSource?.let { audio ->
+            ComponentHeader(
+                title = "Audio Source",
+                onReset = { viewModel.updateEntity(selected.id, "Reset Audio Source") { it.copy(audioSource = dev.nova.editor.scene.AudioSourceComponent()) } },
+                onRemove = { viewModel.updateEntity(selected.id, "Remove Audio Source component") { it.copy(audioSource = null) } },
+            )
+            Text(
+                "Clip: ${audio.audioPath ?: "(none — pick from Assets)"}",
+                style = MaterialTheme.typography.bodySmall,
+                color = NovaColors.TextDim,
+            )
+            ColorSlider("Volume", audio.volume) { v -> viewModel.updateEntity(selected.id, "Edit volume") { e -> e.copy(audioSource = e.audioSource?.copy(volume = v)) } }
+            FloatField("Pitch", audio.pitch) { v -> viewModel.updateEntity(selected.id, "Edit pitch") { e -> e.copy(audioSource = e.audioSource?.copy(pitch = v.coerceIn(0.5f, 2f))) } }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Loop", style = MaterialTheme.typography.bodySmall, color = NovaColors.Text, modifier = Modifier.weight(1f))
+                Switch(checked = audio.loop, onCheckedChange = { v -> viewModel.updateEntity(selected.id, "Toggle loop") { e -> e.copy(audioSource = e.audioSource?.copy(loop = v)) } })
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Autoplay", style = MaterialTheme.typography.bodySmall, color = NovaColors.Text, modifier = Modifier.weight(1f))
+                Switch(checked = audio.autoplay, onCheckedChange = { v -> viewModel.updateEntity(selected.id, "Toggle autoplay") { e -> e.copy(audioSource = e.audioSource?.copy(autoplay = v)) } })
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Music (streamed)", style = MaterialTheme.typography.bodySmall, color = NovaColors.Text, modifier = Modifier.weight(1f))
+                Switch(checked = audio.music, onCheckedChange = { v -> viewModel.updateEntity(selected.id, "Toggle music") { e -> e.copy(audioSource = e.audioSource?.copy(music = v)) } })
+            }
+            Text(
+                "Assign a clip from Assets → file menu 'Use as clip'.",
+                style = MaterialTheme.typography.bodySmall,
+                color = NovaColors.TextDim,
+            )
+            Spacer(Modifier.height(8.dp))
+            HorizontalDivider(color = NovaColors.PanelBorder)
+        }
+
+        // --- Script ---
+        selected.script?.let { script ->
+            ComponentHeader(
+                title = "Script",
+                onReset = { viewModel.updateEntity(selected.id, "Reset Script") { it.copy(script = dev.nova.editor.scene.ScriptComponent()) } },
+                onRemove = { viewModel.updateEntity(selected.id, "Remove Script component") { it.copy(script = null) } },
+            )
+            Text(
+                "File: ${script.scriptPath}",
+                style = MaterialTheme.typography.bodySmall,
+                color = NovaColors.TextDim,
+            )
+            Text(
+                "Edit it in the Scripts tab; it runs during Play.",
+                style = MaterialTheme.typography.bodySmall,
+                color = NovaColors.TextDim,
+            )
+            Spacer(Modifier.height(8.dp))
+            HorizontalDivider(color = NovaColors.PanelBorder)
+        }
+
         // --- Add component ---
         Spacer(Modifier.height(8.dp))
         Text("Add Component", style = MaterialTheme.typography.titleSmall, color = NovaColors.Text)
@@ -260,6 +345,21 @@ fun InspectorPanel(
                 OutlinedButton(onClick = {
                     viewModel.updateEntity(selected.id, "Add Particles component") { it.copy(particles = dev.nova.editor.scene.ParticleEmitterComponent()) }
                 }) { Text("Particles") }
+            }
+            if (selected.tilemap == null) {
+                OutlinedButton(onClick = {
+                    viewModel.updateEntity(selected.id, "Add Tilemap component") { it.copy(tilemap = dev.nova.editor.scene.TilemapComponent()) }
+                }) { Text("Tilemap") }
+            }
+            if (selected.audioSource == null) {
+                OutlinedButton(onClick = {
+                    viewModel.updateEntity(selected.id, "Add Audio Source component") { it.copy(audioSource = dev.nova.editor.scene.AudioSourceComponent()) }
+                }) { Text("Audio") }
+            }
+            if (selected.script == null) {
+                OutlinedButton(onClick = {
+                    viewModel.updateEntity(selected.id, "Add Script component") { it.copy(script = dev.nova.editor.scene.ScriptComponent()) }
+                }) { Text("Script") }
             }
         }
     }

@@ -31,6 +31,9 @@ public:
                      float r, float g, float b, float a, GLuint whiteTexture);
     void endFrame();
 
+    /** GL draw calls issued since the last beginFrame (profiler). */
+    int drawCalls() const { return drawCalls_; }
+
 private:
     void flush();
 
@@ -43,6 +46,7 @@ private:
     GLint uViewProj_ = -1;
     GLint uTex_ = -1;
     bool initialized_ = false;
+    int drawCalls_ = 0;
     static constexpr size_t kMaxVertices = 6 * 4096; // 4096 quads per flush
 };
 

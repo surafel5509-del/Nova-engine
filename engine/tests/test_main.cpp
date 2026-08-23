@@ -94,20 +94,57 @@ void testQuadCorners() {
     nova::computeQuadCorners(5.0f, -3.0f, 0.0f, 2.0f, 0.5f, 2.0f, 4.0f, cx, cy);
     check(nearly(cx[0], 3.0f) && nearly(cy[0], -4.0f), "scaled+translated corner");
 }
+void testTilemapAndEmitterParsing() {
+    const std::string json = R"({
+        "version": 1,
+        "sprites": [],
+        "tilemaps": [
+            {"id": "map", "x": -4.0, "y": -2.0, "tileSize": 1.0, "cols": 3, "rows": 2,
+             "tileset": "assets/textures/tiles.png", "tilesetCols": 8, "tilesetRows": 4,
+             "tiles": [0, 1, -1, 5, -1, 9]}
+        ],
+        "emitters": [
+            {"id": "torch", "x": 2.0, "y": -1.0, "emissionRate": 20.0, "lifetime": 0.8,
+             "speed": 2.5, "gravity": -0.5, "spread": 0.4, "g": 0.8}
+        ],
+        "audioSources": [
+            {"id": "sfx", "path": "assets/audio/jump.wav", "volume": 0.7, "pitch": 1.2, "music": false}
+        ]
+    })";
+    nova::RenderScene scene;
+    std::string error;
+    check(scene.parseFrom(json, &error), "parse tilemap+emitter scene");
+    check(scene.tilemaps.size() == 1, "one tilemap");
+    const auto& t = scene.tilemaps[0];
+    check(t.cols == 3 && t.rows == 2, "tilemap extents");
+    check(t.tiles.size() == 6, "tiles padded to grid");
+    check(t.tiles[2] == -1 && t.tiles[3] == 5, "tile indices with empty cells");
+    check(t.tilesetCols == 8 && t.tilesetRows == 4, "tileset grid");
+    check(scene.emitters.size() == 1, "one emitter");
+    check(nearly(scene.emitters[0].emissionRate, 20.0f), "emitter rate");
+    check(nearly(scene.emitters[0].g, 0.8f), "emitter color partial override");
+    check(scene.audioSources.size() == 1, "one audio source");
+    check(!scene.audioSources[0].music, "sfx vs music flag");
+}
 
 } // namespace
 
 int runPhysicsTests();
+int runParticleTests();
+int runScriptingTests();
 
 int main() {
     testSceneParsing();
     testSceneParsingErrors();
     testMat4();
     testQuadCorners();
+    testTilemapAndEmitterParsing();
 
     std::printf("scene/math: %d checks, %d failures\n", checks, failures);
     const int physicsFailures = runPhysicsTests();
-    const int total = failures + physicsFailures;
+    const int particleFailures = runParticleTests();
+    const int scriptingFailures = runScriptingTests();
+    const int total = failures + physicsFailures + particleFailures + scriptingFailures;
     std::printf("TOTAL: %d failures\n", total);
     return total == 0 ? 0 : 1;
 }

@@ -32,22 +32,33 @@ import java.nio.ByteBuffer
  */
 class GameActivity : ComponentActivity() {
 
-    private var surfaceView: GameSurfaceView? = null
+    private var surfaceView: dev.nova.editor.gameruntime.GameSurfaceView? = null
+    private var audio: dev.nova.editor.audio.AudioEngine? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val projectPath = intent.getStringExtra(EXTRA_PROJECT_PATH)
         val (sceneJson, textureKeys) = rememberScene(projectPath)
+        val scriptSources = rememberScripts(projectPath)
+        val audioEngine = projectPath?.let { dev.nova.editor.audio.AudioEngine(it) }
+        audio = audioEngine
 
         setContent {
             Surface(Modifier.fillMaxSize(), color = Color.Black) {
                 Box(Modifier.fillMaxSize()) {
                     AndroidView(
                         factory = { ctx ->
-                            GameSurfaceView(ctx).also { view ->
+                            dev.nova.editor.gameruntime.GameSurfaceView(ctx).also { view ->
                                 surfaceView = view
+                                view.onSoundEvent = { path ->
+                                    audioEngine?.play(path)
+                                }
                                 view.setScene(sceneJson)
                                 loadTextures(view, projectPath, textureKeys)
+                                for ((name, source) in scriptSources) {
+                                    view.addScript(name, source)
+                                }
+                                startAutoplay(projectPath)
                             }
                         },
                         modifier = Modifier.fillMaxSize(),
@@ -65,6 +76,34 @@ class GameActivity : ComponentActivity() {
         }
     }
 
+    /** Starts autoplay audio sources declared in the scene. */
+    private fun startAutoplay(projectPath: String?) {
+        if (projectPath == null) return
+        runCatching {
+            val repo = ProjectRepository(File(projectPath))
+            val (_, scene) = repo.loadProjectScene(projectPath)
+            for (e in scene.entities) {
+                val a = e.audioSource ?: continue
+                if (!e.enabled || !a.autoplay || a.audioPath == null) continue
+                if (a.music) audio?.playMusic(a.audioPath, a.volume, a.loop)
+                else audio?.play(a.audioPath, a.volume, a.pitch, a.loop)
+            }
+        }
+    }
+
+    private fun rememberScripts(projectPath: String?): Map<String, String> {
+        if (projectPath == null) return emptyMap()
+        return runCatching {
+            val repo = ProjectRepository(File(projectPath))
+            val (_, scene) = repo.loadProjectScene(projectPath)
+            scene.entities.mapNotNull { e ->
+                val path = e.script?.scriptPath ?: return@mapNotNull null
+                val file = File(projectPath, path)
+                if (file.isFile) path to file.readText() else null
+            }.toMap()
+        }.getOrDefault(emptyMap())
+    }
+
     private fun rememberScene(projectPath: String?): Pair<String, Set<String>> {
         if (projectPath == null) return "{}" to emptySet()
         return runCatching {
@@ -76,7 +115,7 @@ class GameActivity : ComponentActivity() {
         }.getOrElse { "{}" to emptySet() }
     }
 
-    private fun loadTextures(view: GameSurfaceView, projectPath: String?, keys: Set<String>) {
+    private fun loadTextures(view: dev.nova.editor.gameruntime.GameSurfaceView, projectPath: String?, keys: Set<String>) {
         if (projectPath == null) return
         for (key in keys) {
             runCatching {
@@ -95,6 +134,8 @@ class GameActivity : ComponentActivity() {
     override fun onDestroy() {
         surfaceView?.release()
         surfaceView = null
+        audio?.release()
+        audio = null
         super.onDestroy()
     }
 

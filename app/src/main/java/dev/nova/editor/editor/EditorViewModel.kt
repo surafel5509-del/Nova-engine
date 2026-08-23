@@ -15,13 +15,24 @@ import dev.nova.editor.scene.SceneOps
 import dev.nova.editor.scene.buildRenderScene
 import kotlinx.serialization.encodeToString
 
-enum class EditorTool(val label: String) { SELECT("Select"), MOVE("Move"), PAN("Pan"), ZOOM("Zoom") }
+enum class EditorTool(val label: String) { SELECT("Select"), MOVE("Move"), TILE("Tile"), PAN("Pan"), ZOOM("Zoom") }
 
 enum class LogLevel { INFO, WARNING, ERROR }
 
 enum class PlayState { STOPPED, PLAYING, PAUSED }
 
 data class LogEntry(val timestampMs: Long, val level: LogLevel, val message: String)
+
+/** Profiler snapshot mirrored from native stats. */
+data class EngineStats(
+    val fps: Float = 0f,
+    val frameMs: Float = 0f,
+    val drawCalls: Int = 0,
+    val sprites: Int = 0,
+    val bodies: Int = 0,
+    val particles: Int = 0,
+    val scripts: Int = 0,
+)
 
 class EditorViewModel(
     val projectPath: String,
@@ -70,6 +81,15 @@ class EditorViewModel(
 
     /** Snapshot of the scene taken when Play was pressed; restored on Stop. */
     private var prePlayScene: Scene? = null
+
+    // ---- Tile editing ----
+    /** Currently selected tile index painted by the TILE tool. */
+    var tileBrush by mutableIntStateOf(0)
+
+    // ---- Profiler ----
+    var stats by mutableStateOf(EngineStats())
+        private set
+    var profilerVisible by mutableStateOf(false)
 
     // ---- Asset browser ----
     var assetDir by mutableStateOf("assets")
@@ -312,6 +332,53 @@ class EditorViewModel(
 
     fun togglePhysicsDebug() {
         physicsDebug = !physicsDebug
+    }
+
+    fun toggleProfiler() {
+        profilerVisible = !profilerVisible
+    }
+
+    /** Called by the viewport with fresh native stats. */
+    fun updateStats(newStats: EngineStats) {
+        stats = newStats
+    }
+
+    // ---- Tile painting ----
+
+    /**
+     * Paints [value] into the tilemap of [entityId] at the world position.
+     * Returns true if a cell was hit. Undoable; repeated paints of the same
+     * cell during one drag are coalesced by the caller.
+     */
+    fun paintTileAt(entityId: String, worldX: Float, worldY: Float, value: Int): Boolean {
+        val entity = SceneOps.find(scene, entityId) ?: return false
+        val map = entity.tilemap ?: return false
+        val wt = SceneOps.worldTransform(scene, entityId)
+        val col = kotlin.math.floor((worldX - wt.x) / map.tileSize).toInt()
+        val row = kotlin.math.floor((worldY - wt.y) / map.tileSize).toInt()
+        if (col !in 0 until map.cols || row !in 0 until map.rows) return false
+        if (map.tileAt(col, row) == value) return true   // nothing to do
+        updateEntity(entityId, if (value >= 0) "Paint tile" else "Erase tile") { e ->
+            e.copy(tilemap = e.tilemap?.withTile(col, row, value))
+        }
+        return true
+    }
+
+    /** First tilemap entity in the scene (the TILE tool's target), if any. */
+    fun activeTilemapId(): String? =
+        scene.entities.firstOrNull { it.enabled && it.tilemap != null }?.id
+
+    // ---- Scripts ----
+
+    /** Reads every script referenced by the scene: path -> source. */
+    fun loadScriptSources(): Map<String, String> {
+        val result = LinkedHashMap<String, String>()
+        for (e in scene.entities) {
+            val path = e.script?.scriptPath ?: continue
+            val file = java.io.File(projectPath, path)
+            if (file.isFile) result[path] = file.readText()
+        }
+        return result
     }
 
     // ---- Asset browser ----

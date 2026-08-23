@@ -1,6 +1,7 @@
 #include "rendering/GlesRenderer.h"
 
 #include "core/Log.h"
+#include "particles/ParticleSystem.h"
 
 namespace nova {
 
@@ -144,13 +145,34 @@ Mat4 GlesRenderer::computeViewProj() const {
 }
 
 void GlesRenderer::drawFrame(const RenderScene& scene) {
+    drawFrame(scene, nullptr);
+}
+
+void GlesRenderer::drawFrame(const RenderScene& scene, const ParticleSystem* particles) {
     if (!initialized_) return;
     glViewport(0, 0, viewportWidth_, viewportHeight_);
     glClearColor(clearR_, clearG_, clearB_, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
     if (gridVisible_ && !useGameCamera_) drawGrid();
+    const Mat4 viewProj = computeViewProj();
+    spriteBatch_.beginFrame(viewProj);
+    drawTilemaps(scene);
     drawSprites(scene);
+    if (particles) drawParticles(*particles);
+    spriteBatch_.endFrame();
+    for (const SpriteInstance& sprite : scene.sprites) {
+        if (sprite.selected) {
+            spriteBatch_.drawSelectionOutline(sprite, whiteTexture_.id());
+        }
+    }
+    if (showGameCamera_ && scene.gameCamera.present && !useGameCamera_) {
+        drawGameCameraFrame(scene, viewProj);
+    }
+    if (showPhysicsDebug_) {
+        drawPhysicsDebug(scene, viewProj);
+    }
+    lastDrawCalls_ = spriteBatch_.drawCalls();
 }
 
 void GlesRenderer::drawGrid() {
@@ -164,9 +186,35 @@ void GlesRenderer::drawGrid() {
     glBindVertexArray(0);
 }
 
+void GlesRenderer::drawTilemaps(const RenderScene& scene) {
+    for (const TilemapRecord& t : scene.tilemaps) {
+        GLuint texture = 0;
+        if (!t.tileset.empty()) {
+            auto it = textures_.find(t.tileset);
+            if (it != textures_.end()) texture = it->second.id();
+        }
+        const int cols = t.cols;
+        const int rows = t.rows;
+        for (int row = 0; row < rows; ++row) {
+            for (int col = 0; col < cols; ++col) {
+                const int idx = t.tiles[static_cast<size_t>(row) * cols + col];
+                if (idx < 0) continue;
+                // Draw via the sprite batcher as one atlas frame.
+                SpriteInstance cell;
+                cell.x = t.x + (col + 0.5f) * t.tileSize;
+                cell.y = t.y + (row + 0.5f) * t.tileSize;
+                cell.width = t.tileSize;
+                cell.height = t.tileSize;
+                cell.frameCols = t.tilesetCols > 0 ? t.tilesetCols : 1;
+                cell.frameRows = t.tilesetRows > 0 ? t.tilesetRows : 1;
+                cell.frameIndex = idx;
+                spriteBatch_.drawSprite(cell, texture, whiteTexture_.id());
+            }
+        }
+    }
+}
+
 void GlesRenderer::drawSprites(const RenderScene& scene) {
-    const Mat4 viewProj = computeViewProj();
-    spriteBatch_.beginFrame(viewProj);
     for (const SpriteInstance& sprite : scene.sprites) {
         GLuint texture = 0;
         if (!sprite.texture.empty()) {
@@ -182,17 +230,29 @@ void GlesRenderer::drawSprites(const RenderScene& scene) {
         }
         spriteBatch_.drawSprite(s, texture, whiteTexture_.id());
     }
-    spriteBatch_.endFrame();
-    for (const SpriteInstance& sprite : scene.sprites) {
-        if (sprite.selected) {
-            spriteBatch_.drawSelectionOutline(sprite, whiteTexture_.id());
+}
+
+void GlesRenderer::drawParticles(const ParticleSystem& particles) {
+    for (size_t i = 0; i < particles.emitterCount(); ++i) {
+        const ParticleEmitterRecord& e = particles.emitters()[i];
+        GLuint texture = 0;
+        if (!e.texture.empty()) {
+            auto it = textures_.find(e.texture);
+            if (it != textures_.end()) texture = it->second.id();
         }
-    }
-    if (showGameCamera_ && scene.gameCamera.present && !useGameCamera_) {
-        drawGameCameraFrame(scene, viewProj);
-    }
-    if (showPhysicsDebug_) {
-        drawPhysicsDebug(scene, viewProj);
+        for (const Particle& p : particles.particles(i)) {
+            const float t = p.age / p.lifetime;
+            SpriteInstance s;
+            s.x = p.x;
+            s.y = p.y;
+            s.width = p.startSize + (p.endSize - p.startSize) * t;
+            s.height = s.width;
+            s.r = p.r;
+            s.g = p.g;
+            s.b = p.b;
+            s.a = 1.0f - t;   // fade out over lifetime
+            spriteBatch_.drawSprite(s, texture, whiteTexture_.id());
+        }
     }
 }
 

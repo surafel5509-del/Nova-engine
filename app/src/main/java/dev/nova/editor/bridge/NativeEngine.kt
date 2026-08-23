@@ -36,6 +36,14 @@ object NativeEngine {
     external fun nativeStepSimulation(handle: Long, dt: Float)
     external fun nativeSnapshotPositions(handle: Long): String
 
+    // ---- Scripting ----
+    external fun nativeLoadScript(handle: Long, name: String, source: String)
+
+    // ---- Events / profiling (drain per frame on the GL thread) ----
+    external fun nativeConsumeSoundEvents(handle: Long): String
+    external fun nativeConsumeLogs(handle: Long): String
+    external fun nativeGetStats(handle: Long): String
+
     // ---- Game view / runtime ----
     external fun nativeSetUseGameCamera(handle: Long, use: Boolean)
     external fun nativeSetShowGameCamera(handle: Long, show: Boolean)

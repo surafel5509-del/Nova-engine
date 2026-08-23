@@ -1,0 +1,49 @@
+{
+    "version": 1,
+    "name": "Main",
+    "entities": [
+        {
+            "id": "camera-1",
+            "name": "Main Camera",
+            "enabled": true,
+            "parentId": null,
+            "transform": {"x": 0, "y": 0, "rotation": 0, "scaleX": 1, "scaleY": 1},
+            "camera": {"zoom": 100, "frustumWidth": 12, "frustumHeight": 7, "backgroundR": 0.09, "backgroundG": 0.1, "backgroundB": 0.13}
+        },
+        {
+            "id": "ground-1",
+            "name": "Ground",
+            "enabled": true,
+            "parentId": null,
+            "transform": {"x": 0, "y": -2.5, "rotation": 0, "scaleX": 1, "scaleY": 1},
+            "sprite": {"width": 12, "height": 1, "r": 0.35, "g": 0.45, "b": 0.38, "a": 1},
+            "physicsBody": {"bodyType": "static", "colliderWidth": 12, "colliderHeight": 1}
+        },
+        {
+            "id": "player-1",
+            "name": "Player",
+            "enabled": true,
+            "parentId": null,
+            "transform": {"x": 0, "y": 0, "rotation": 0, "scaleX": 1, "scaleY": 1},
+            "sprite": {"width": 1, "height": 1, "r": 0.3, "g": 0.7, "b": 0.95, "a": 1},
+            "physicsBody": {"bodyType": "dynamic", "colliderWidth": 1, "colliderHeight": 1},
+            "script": {"scriptPath": "scripts/player.lua"}
+        },
+        {
+            "id": "dust-1",
+            "name": "Dust",
+            "enabled": true,
+            "parentId": null,
+            "transform": {"x": 0, "y": -1.8, "rotation": 0, "scaleX": 1, "scaleY": 1},
+            "particles": {"emissionRate": 40, "lifetime": 0.8, "speed": 1.5, "spreadDegrees": 60, "gravity": -1, "startSize": 0.15, "endSize": 0.02}
+        },
+        {
+            "id": "rocks-1",
+            "name": "Tilemap",
+            "enabled": true,
+            "parentId": null,
+            "transform": {"x": -4, "y": -2.2, "rotation": 0, "scaleX": 1, "scaleY": 1},
+            "tilemap": {"tileSize": 0.5, "cols": 8, "rows": 2, "tilesetCols": 1, "tilesetRows": 1, "tiles": [0,0,0,0,0,0,0,0,0,-1,0,0,-1,0,0,0]}
+        }
+    ]
+}

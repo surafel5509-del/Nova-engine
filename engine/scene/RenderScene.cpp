@@ -103,8 +103,95 @@ bool RenderScene::parseFrom(const std::string& jsonText, std::string* outError) 
         next.gameCamera.bgB = getFloat(jc, "bgB", 0.13f);
     }
 
+    if (root.contains("emitters") && root["emitters"].is_array()) {
+        for (const auto& je : root["emitters"]) {
+            if (!je.is_object()) continue;
+            ParticleEmitterRecord e;
+            e.id = getString(je, "id", "");
+            e.x = getFloat(je, "x", 0.0f);
+            e.y = getFloat(je, "y", 0.0f);
+            e.emissionRate = getFloat(je, "emissionRate", 12.0f);
+            e.lifetime = getFloat(je, "lifetime", 1.2f);
+            e.speed = getFloat(je, "speed", 3.0f);
+            e.gravity = getFloat(je, "gravity", 0.0f);
+            e.startSize = getFloat(je, "startSize", 0.25f);
+            e.endSize = getFloat(je, "endSize", 0.05f);
+            e.spread = getFloat(je, "spread", 3.14159f);
+            e.direction = getFloat(je, "direction", 1.5708f);
+            e.r = getFloat(je, "r", 1.0f);
+            e.g = getFloat(je, "g", 0.7f);
+            e.b = getFloat(je, "b", 0.3f);
+            e.texture = getString(je, "texture", "");
+            next.emitters.push_back(std::move(e));
+        }
+    }
+
+    if (root.contains("tilemaps") && root["tilemaps"].is_array()) {
+        for (const auto& jt : root["tilemaps"]) {
+            if (!jt.is_object()) continue;
+            TilemapRecord t;
+            t.id = getString(jt, "id", "");
+            t.x = getFloat(jt, "x", 0.0f);
+            t.y = getFloat(jt, "y", 0.0f);
+            t.tileSize = getFloat(jt, "tileSize", 1.0f);
+            t.cols = getInt(jt, "cols", 0);
+            t.rows = getInt(jt, "rows", 0);
+            t.tileset = getString(jt, "tileset", "");
+            t.tilesetCols = getInt(jt, "tilesetCols", 1);
+            t.tilesetRows = getInt(jt, "tilesetRows", 1);
+            if (jt.contains("tiles") && jt["tiles"].is_array()) {
+                t.tiles.reserve(jt["tiles"].size());
+                for (const auto& cell : jt["tiles"]) {
+                    t.tiles.push_back(cell.is_number() ? cell.get<int>() : -1);
+                }
+            }
+            const size_t expected = static_cast<size_t>(t.cols) * static_cast<size_t>(t.rows);
+            if (t.tiles.size() < expected) t.tiles.resize(expected, -1);
+            next.tilemaps.push_back(std::move(t));
+        }
+    }
+
+    if (root.contains("audioSources") && root["audioSources"].is_array()) {
+        for (const auto& ja : root["audioSources"]) {
+            if (!ja.is_object()) continue;
+            AudioSourceRecord a;
+            a.id = getString(ja, "id", "");
+            a.path = getString(ja, "path", "");
+            a.volume = getFloat(ja, "volume", 1.0f);
+            a.pitch = getFloat(ja, "pitch", 1.0f);
+            a.loop = getBool(ja, "loop", false);
+            a.autoplay = getBool(ja, "autoplay", false);
+            a.music = getBool(ja, "music", false);
+            next.audioSources.push_back(std::move(a));
+        }
+    }
+
+    if (root.contains("scripts") && root["scripts"].is_array()) {
+        for (const auto& js : root["scripts"]) {
+            if (!js.is_object()) continue;
+            ScriptRecord r;
+            r.id = getString(js, "id", "");
+            r.script = getString(js, "script", "");
+            next.scripts.push_back(std::move(r));
+        }
+    }
+
     *this = std::move(next);
     return true;
+}
+
+SpriteInstance* RenderScene::findSprite(const std::string& id) {
+    for (auto& s : sprites) {
+        if (s.id == id) return &s;
+    }
+    return nullptr;
+}
+
+const SpriteInstance* RenderScene::findSprite(const std::string& id) const {
+    for (const auto& s : sprites) {
+        if (s.id == id) return &s;
+    }
+    return nullptr;
 }
 
 } // namespace nova

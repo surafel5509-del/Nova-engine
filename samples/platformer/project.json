@@ -1,0 +1,9 @@
+{
+    "name": "Sample Platformer",
+    "packageName": "dev.nova.samples.platformer",
+    "projectVersion": "1.0",
+    "orientation": "LANDSCAPE",
+    "dimension": "TWO_D",
+    "template": "PLATFORMER",
+    "lastOpenedEpochMs": 0
+}

@@ -3,6 +3,7 @@ package dev.nova.editor.ui.editor
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -53,7 +54,8 @@ import dev.nova.editor.project.ProjectRepository
 import dev.nova.editor.ui.theme.NovaColors
 
 private enum class BottomTab(val label: String) {
-    HIERARCHY("Hierarchy"), INSPECTOR("Inspector"), ASSETS("Assets"), CONSOLE("Console")
+    HIERARCHY("Hierarchy"), INSPECTOR("Inspector"), ASSETS("Assets"),
+    SCRIPTS("Scripts"), CONSOLE("Console")
 }
 
 /**
@@ -116,7 +118,7 @@ fun EditorScreen(
                     HierarchyPanel(viewModel, Modifier.width(220.dp).fillMaxHeight())
                     VerticalDivider(color = NovaColors.PanelBorder)
                     Column(Modifier.weight(1f).fillMaxHeight()) {
-                        Viewport(viewModel, Modifier.weight(1f).fillMaxWidth())
+                        ViewportWithOverlay(viewModel, Modifier.weight(1f).fillMaxWidth())
                         HorizontalDivider(color = NovaColors.PanelBorder)
                         ConsolePanel(viewModel, Modifier.height(120.dp).fillMaxWidth())
                     }
@@ -126,7 +128,7 @@ fun EditorScreen(
             } else {
                 // Compact layout: viewport on top, tabbed panels below.
                 var bottomTab by remember { mutableStateOf(BottomTab.HIERARCHY) }
-                Viewport(viewModel, Modifier.weight(1f).fillMaxWidth())
+                ViewportWithOverlay(viewModel, Modifier.weight(1f).fillMaxWidth())
                 HorizontalDivider(color = NovaColors.PanelBorder)
                 TabRow(selectedTabIndex = bottomTab.ordinal) {
                     BottomTab.entries.forEach { tab ->
@@ -142,10 +144,22 @@ fun EditorScreen(
                         BottomTab.HIERARCHY -> HierarchyPanel(viewModel)
                         BottomTab.INSPECTOR -> InspectorPanel(viewModel, importTexture)
                         BottomTab.ASSETS -> AssetBrowserPanel(viewModel)
+                        BottomTab.SCRIPTS -> ScriptEditorPanel(viewModel)
                         BottomTab.CONSOLE -> ConsolePanel(viewModel)
                     }
                 }
             }
+        }
+    }
+}
+
+/** Viewport plus the profiler HUD overlay. */
+@Composable
+private fun ViewportWithOverlay(viewModel: EditorViewModel, modifier: Modifier = Modifier) {
+    Box(modifier) {
+        Viewport(viewModel, Modifier.fillMaxSize())
+        if (viewModel.profilerVisible) {
+            ProfilerOverlay(viewModel, Modifier.align(androidx.compose.ui.Alignment.TopStart))
         }
     }
 }
@@ -156,6 +170,7 @@ private fun EditorToolbar(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
+    var showBuildDialog by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -236,6 +251,12 @@ private fun EditorToolbar(
             label = { Text("Physics", style = MaterialTheme.typography.labelSmall) },
             modifier = Modifier.padding(horizontal = 2.dp),
         )
+        FilterChip(
+            selected = viewModel.profilerVisible,
+            onClick = { viewModel.toggleProfiler() },
+            label = { Text("Stats", style = MaterialTheme.typography.labelSmall) },
+            modifier = Modifier.padding(horizontal = 2.dp),
+        )
 
         VerticalDivider(modifier = Modifier.height(24.dp), color = NovaColors.PanelBorder)
         TextButton(onClick = {
@@ -245,7 +266,11 @@ private fun EditorToolbar(
                 .putExtra(dev.nova.editor.runtime.GameActivity.EXTRA_PROJECT_PATH, viewModel.projectPath)
             context.startActivity(intent)
         }) { Text("Run ▶") }
-        TextButton(onClick = {}, enabled = false) { Text("Build (Phase 5)") }
+        TextButton(onClick = { showBuildDialog = true }) { Text("Build") }
+    }
+
+    if (showBuildDialog) {
+        BuildExportDialog(viewModel, onDismiss = { showBuildDialog = false })
     }
 }
 

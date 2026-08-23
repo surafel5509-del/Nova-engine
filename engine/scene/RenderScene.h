@@ -56,6 +56,56 @@ struct GameCamera {
     float bgB = 0.13f;
 };
 
+/** Particle emitter parameters parsed from the render scene. */
+struct ParticleEmitterRecord {
+    std::string id;
+    float x = 0.0f;
+    float y = 0.0f;
+    float emissionRate = 12.0f;  // particles per second
+    float lifetime = 1.2f;       // seconds per particle
+    float speed = 3.0f;
+    float gravity = 0.0f;        // extra gravity on particles
+    float startSize = 0.25f;
+    float endSize = 0.05f;
+    float spread = 3.14159f;     // emission cone (radians), full circle default
+    float direction = 1.5708f;   // base emission angle (radians, up)
+    float r = 1.0f;
+    float g = 0.7f;
+    float b = 0.3f;
+    std::string texture;         // optional particle texture
+};
+
+/** A tile layer: grid of tile indices into a tileset atlas. -1 = empty. */
+struct TilemapRecord {
+    std::string id;
+    float x = 0.0f;              // world position of grid origin (bottom-left of cell 0,0)
+    float y = 0.0f;
+    float tileSize = 1.0f;       // world units per tile
+    int cols = 0;
+    int rows = 0;
+    std::string tileset;         // atlas texture key
+    int tilesetCols = 1;         // atlas grid
+    int tilesetRows = 1;
+    std::vector<int> tiles;      // row-major, rows*cols entries, -1 = empty
+};
+
+/** Audio source parsed from the scene (playback is host-side via events). */
+struct AudioSourceRecord {
+    std::string id;
+    std::string path;
+    float volume = 1.0f;
+    float pitch = 1.0f;
+    bool loop = false;
+    bool autoplay = false;
+    bool music = false;          // music streams, sfx is preloaded
+};
+
+/** Script binding: entity id -> script name (source pushed separately). */
+struct ScriptRecord {
+    std::string id;
+    std::string script;          // script asset name, e.g. "scripts/player.lua"
+};
+
 /**
  * Flat render scene pushed from the editor as JSON. Parsing lives on the
  * engine side so the runtime engine and the editor share one format.
@@ -64,10 +114,17 @@ struct RenderScene {
     int version = 1;
     std::vector<SpriteInstance> sprites;
     std::vector<BodyRecord> bodies;
+    std::vector<ParticleEmitterRecord> emitters;
+    std::vector<TilemapRecord> tilemaps;
+    std::vector<AudioSourceRecord> audioSources;
+    std::vector<ScriptRecord> scripts;
     GameCamera gameCamera;
 
     /** Parses JSON; returns false (and leaves *this unchanged) on error. */
     bool parseFrom(const std::string& json, std::string* outError = nullptr);
+
+    const SpriteInstance* findSprite(const std::string& id) const;
+    SpriteInstance* findSprite(const std::string& id);
 };
 
 } // namespace nova

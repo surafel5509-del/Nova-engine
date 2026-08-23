@@ -6,6 +6,7 @@ import android.opengl.GLSurfaceView
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,15 +23,18 @@ import dev.nova.editor.bridge.EngineGlRenderer
 import dev.nova.editor.bridge.NativeEngine
 import dev.nova.editor.editor.EditorTool
 import dev.nova.editor.editor.EditorViewModel
+import dev.nova.editor.editor.EngineStats
 import dev.nova.editor.editor.LogLevel
 import dev.nova.editor.editor.PlayState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.isActive
+import org.json.JSONArray
+import org.json.JSONObject
 import java.nio.ByteBuffer
 
-private enum class GestureMode { NONE, ENTITY_DRAG, CAMERA_PAN, CAMERA_ZOOM }
+private enum class GestureMode { NONE, ENTITY_DRAG, CAMERA_PAN, CAMERA_ZOOM, TILE_PAINT }
 
 /**
  * 2D scene viewport: native GLES surface + editor gesture layer.
@@ -43,6 +47,10 @@ fun Viewport(
     modifier: Modifier = Modifier,
 ) {
     val renderer = remember { EngineGlRenderer() }
+    val audio = remember { dev.nova.editor.audio.AudioEngine(viewModel.projectPath) }
+    DisposableEffect(Unit) {
+        onDispose { audio.release() }
+    }
     var viewportSizePx by remember { mutableStateOf(Offset.Zero) }
 
     // Push editor state into the native engine whenever it changes.
@@ -76,18 +84,52 @@ fun Viewport(
     LaunchedEffect(viewModel.playState) {
         when (viewModel.playState) {
             PlayState.PLAYING -> {
+                val scripts = viewModel.loadScriptSources()
+                // Push all script sources, then start the simulation.
+                for ((name, source) in scripts) {
+                    renderer.queue { h -> NativeEngine.nativeLoadScript(h, name, source) }
+                }
                 renderer.queue { NativeEngine.nativeStartSimulation(it) }
+                // Autoplay audio sources.
+                withContext(Dispatchers.Default) {
+                    for (e in viewModel.scene.entities) {
+                        val a = e.audioSource ?: continue
+                        if (!e.enabled || !a.autoplay || a.audioPath == null) continue
+                        if (a.music) audio.playMusic(a.audioPath, a.volume, a.loop)
+                        else audio.play(a.audioPath, a.volume, a.pitch, a.loop)
+                    }
+                }
                 var last = System.nanoTime()
+                var statsAccum = 0f
                 while (isActive && viewModel.playState == PlayState.PLAYING) {
                     val now = System.nanoTime()
                     val dt = ((now - last) / 1_000_000_000f).coerceAtMost(0.05f)
                     last = now
                     renderer.queue { NativeEngine.nativeStepSimulation(it, dt) }
+
+                    // Drain script logs + sound events + stats off the GL thread.
+                    withContext(Dispatchers.Default) {
+                        val logsJson = renderer.callBlocking { h -> NativeEngine.nativeConsumeLogs(h) }
+                        parseStringArray(logsJson).forEach { msg ->
+                            viewModel.log(LogLevel.INFO, msg)
+                        }
+                        val soundsJson = renderer.callBlocking { h -> NativeEngine.nativeConsumeSoundEvents(h) }
+                        for (path in parseStringArray(soundsJson)) {
+                            audio.play(path)
+                        }
+                        statsAccum += dt
+                        if (statsAccum >= 0.5f) {
+                            statsAccum = 0f
+                            val statsJson = renderer.callBlocking { h -> NativeEngine.nativeGetStats(h) }
+                            parseStats(statsJson)?.let(viewModel::updateStats)
+                        }
+                    }
                     delay(16)
                 }
             }
             PlayState.PAUSED -> Unit
             PlayState.STOPPED -> {
+                withContext(Dispatchers.Default) { audio.stopAll() }
                 renderer.queue { NativeEngine.nativeStopSimulation(it) }
             }
         }
@@ -140,7 +182,13 @@ private suspend fun PointerInputScope.handleViewportGestures(
                 if (pressed.isEmpty()) {
                     if (!moved && !sawSecondPointer) {
                         val world = screenToWorld(startPos)
-                        viewModel.select(viewModel.pickAt(world.x, world.y))
+                        if (viewModel.activeTool == EditorTool.TILE) {
+                            viewModel.activeTilemapId()?.let { mapId ->
+                                viewModel.paintTileAt(mapId, world.x, world.y, viewModel.tileBrush)
+                            }
+                        } else {
+                            viewModel.select(viewModel.pickAt(world.x, world.y))
+                        }
                     }
                     if (mode == GestureMode.ENTITY_DRAG) draggedEntityId?.let(viewModel::endEntityDrag)
                     break
@@ -190,6 +238,7 @@ private suspend fun PointerInputScope.handleViewportGestures(
                     mode = when (viewModel.activeTool) {
                         EditorTool.PAN -> GestureMode.CAMERA_PAN
                         EditorTool.ZOOM -> GestureMode.CAMERA_ZOOM
+                        EditorTool.TILE -> GestureMode.TILE_PAINT
                         EditorTool.SELECT, EditorTool.MOVE -> {
                             val world = screenToWorld(startPos)
                             val hit = viewModel.pickAt(world.x, world.y)
@@ -211,6 +260,12 @@ private suspend fun PointerInputScope.handleViewportGestures(
                         GestureMode.ENTITY_DRAG -> draggedEntityId?.let { id ->
                             val ppu = viewModel.camera.pixelsPerUnit
                             viewModel.moveEntityBy(id, delta.x / ppu, -delta.y / ppu)
+                        }
+                        GestureMode.TILE_PAINT -> {
+                            val world = screenToWorld(position)
+                            viewModel.activeTilemapId()?.let { mapId ->
+                                viewModel.paintTileAt(mapId, world.x, world.y, viewModel.tileBrush)
+                            }
                         }
                         GestureMode.CAMERA_PAN ->
                             viewModel.updateCamera(viewModel.camera.panByScreen(delta.x, delta.y))
@@ -256,4 +311,28 @@ private suspend fun loadAndSubmitTexture(
     } else {
         viewModel.log(LogLevel.WARNING, "Could not decode texture '$key'")
     }
+}
+
+private fun parseStringArray(json: String?): List<String> {
+    if (json.isNullOrBlank()) return emptyList()
+    return runCatching {
+        val array = JSONArray(json)
+        (0 until array.length()).map { array.getString(it) }
+    }.getOrDefault(emptyList())
+}
+
+private fun parseStats(json: String?): EngineStats? {
+    if (json.isNullOrBlank()) return null
+    return runCatching {
+        val obj = JSONObject(json)
+        EngineStats(
+            fps = obj.optDouble("fps", 0.0).toFloat(),
+            frameMs = obj.optDouble("frameMs", 0.0).toFloat(),
+            drawCalls = obj.optInt("drawCalls", 0),
+            sprites = obj.optInt("sprites", 0),
+            bodies = obj.optInt("bodies", 0),
+            particles = obj.optInt("particles", 0),
+            scripts = obj.optInt("scripts", 0),
+        )
+    }.getOrNull()
 }

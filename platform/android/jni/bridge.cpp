@@ -159,4 +159,42 @@ Java_dev_nova_editor_bridge_NativeEngine_nativeSetInputJump(JNIEnv* /*env*/, job
     if (auto* e = fromHandle(handle)) e->setInputJump(pressed == JNI_TRUE);
 }
 
+JNIEXPORT void JNICALL
+Java_dev_nova_editor_bridge_NativeEngine_nativeLoadScript(JNIEnv* env, jobject /*thiz*/, jlong handle, jstring name, jstring source) {
+    if (auto* e = fromHandle(handle)) {
+        if (name == nullptr || source == nullptr) return;
+        const char* n = env->GetStringUTFChars(name, nullptr);
+        const char* s = env->GetStringUTFChars(source, nullptr);
+        if (n != nullptr && s != nullptr) {
+            e->loadScript(n, s);
+        }
+        if (n != nullptr) env->ReleaseStringUTFChars(name, n);
+        if (s != nullptr) env->ReleaseStringUTFChars(source, s);
+    }
+}
+
+JNIEXPORT jstring JNICALL
+Java_dev_nova_editor_bridge_NativeEngine_nativeConsumeSoundEvents(JNIEnv* env, jobject /*thiz*/, jlong handle) {
+    if (auto* e = fromHandle(handle)) {
+        return env->NewStringUTF(e->consumeSoundEventsJson().c_str());
+    }
+    return env->NewStringUTF("[]");
+}
+
+JNIEXPORT jstring JNICALL
+Java_dev_nova_editor_bridge_NativeEngine_nativeConsumeLogs(JNIEnv* env, jobject /*thiz*/, jlong handle) {
+    if (auto* e = fromHandle(handle)) {
+        return env->NewStringUTF(e->consumeLogsJson().c_str());
+    }
+    return env->NewStringUTF("[]");
+}
+
+JNIEXPORT jstring JNICALL
+Java_dev_nova_editor_bridge_NativeEngine_nativeGetStats(JNIEnv* env, jobject /*thiz*/, jlong handle) {
+    if (auto* e = fromHandle(handle)) {
+        return env->NewStringUTF(e->statsJson().c_str());
+    }
+    return env->NewStringUTF("{}");
+}
+
 } // extern "C"

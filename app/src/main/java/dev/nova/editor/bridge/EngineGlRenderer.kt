@@ -39,6 +39,23 @@ class EngineGlRenderer : GLSurfaceView.Renderer {
         }
     }
 
+    /**
+     * Runs [block] on the GL thread and waits (up to 100 ms) for its result.
+     * For draining native events/stats — never call from the GL thread itself.
+     */
+    fun <T> callBlocking(block: (Long) -> T): T? {
+        val view = glView ?: return null
+        val latch = java.util.concurrent.CountDownLatch(1)
+        var result: T? = null
+        view.queueEvent {
+            val h = handle
+            if (h != 0L) result = block(h)
+            latch.countDown()
+        }
+        latch.await(100, java.util.concurrent.TimeUnit.MILLISECONDS)
+        return result
+    }
+
     fun submitScene(json: String) {
         pendingSceneJson = json
         queue { NativeEngine.nativeSetScene(it, json) }

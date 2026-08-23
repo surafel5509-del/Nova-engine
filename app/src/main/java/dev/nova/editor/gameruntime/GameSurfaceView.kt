@@ -1,4 +1,4 @@
-package dev.nova.editor.runtime
+package dev.nova.editor.gameruntime
 
 import android.content.Context
 import android.opengl.GLSurfaceView
@@ -15,6 +15,10 @@ class GameSurfaceView(context: Context) : GLSurfaceView(context) {
     private var engineHandle: Long = 0
     private var sceneJson: String = "{}"
     private val textures = LinkedHashMap<String, TexturePayload>()
+    private val scripts = LinkedHashMap<String, String>()
+
+    /** Called (on the GL thread) when a script plays a sound. */
+    var onSoundEvent: ((String) -> Unit)? = null
 
     class TexturePayload(val rgba: ByteArray, val width: Int, val height: Int)
 
@@ -31,6 +35,11 @@ class GameSurfaceView(context: Context) : GLSurfaceView(context) {
                 }
             }
             NativeEngine.nativeSetScene(engineHandle, sceneJson)
+            synchronized(scripts) {
+                for ((name, source) in scripts) {
+                    NativeEngine.nativeLoadScript(engineHandle, name, source)
+                }
+            }
             NativeEngine.nativeStartSimulation(engineHandle)
         }
 
@@ -45,8 +54,18 @@ class GameSurfaceView(context: Context) : GLSurfaceView(context) {
             val dt = ((now - last) / 1_000_000_000f).coerceAtMost(0.05f)
             last = now
             NativeEngine.nativeStepSimulation(engineHandle, dt)
+            // Drain script-triggered sounds.
+            val events = NativeEngine.nativeConsumeSoundEvents(engineHandle)
+            if (events.length > 2) {
+                parsePaths(events).forEach { onSoundEvent?.invoke(it) }
+            }
             NativeEngine.nativeDrawFrame(engineHandle)
         }
+
+        private fun parsePaths(json: String): List<String> = runCatching {
+            val array = org.json.JSONArray(json)
+            (0 until array.length()).map { array.getString(it) }
+        }.getOrDefault(emptyList())
     }
 
     init {
@@ -65,6 +84,14 @@ class GameSurfaceView(context: Context) : GLSurfaceView(context) {
         synchronized(textures) { textures[key] = TexturePayload(rgba, width, height) }
         queueEvent {
             if (engineHandle != 0L) NativeEngine.nativeLoadTexture(engineHandle, key, rgba, width, height)
+        }
+    }
+
+    /** Registers a Lua script source (before surface creation or live). */
+    fun addScript(name: String, source: String) {
+        synchronized(scripts) { scripts[name] = source }
+        queueEvent {
+            if (engineHandle != 0L) NativeEngine.nativeLoadScript(engineHandle, name, source)
         }
     }
 

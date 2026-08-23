@@ -1,6 +1,7 @@
 #include "core/Engine.h"
 
 #include <cmath>
+#include <cstdio>
 
 #include "core/Log.h"
 
@@ -34,8 +35,20 @@ void Engine::onSurfaceChanged(int width, int height) {
 
 void Engine::onDrawFrame() {
     if (!glReady_) return;
+    const auto start = std::chrono::steady_clock::now();
     applyGameCameraIfEnabled();
-    renderer_.drawFrame(scene_);
+    renderer_.drawFrame(scene_, simulating_ ? &particles_ : nullptr);
+    const auto end = std::chrono::steady_clock::now();
+    frameMs_ = std::chrono::duration<float, std::milli>(end - start).count();
+
+    ++fpsFrames_;
+    fpsAccumSec_ += std::chrono::duration<float>(end - lastFrameStart_).count();
+    lastFrameStart_ = end;
+    if (fpsAccumSec_ >= 0.5f) {
+        fps_ = fpsFrames_ / fpsAccumSec_;
+        fpsFrames_ = 0;
+        fpsAccumSec_ = 0.0f;
+    }
 }
 
 void Engine::setSceneJson(const std::string& json) {
@@ -47,7 +60,7 @@ void Engine::setSceneJson(const std::string& json) {
     // New scene invalidates animation timers; physics restarts on next startSimulation.
     animTime_.clear();
     if (simulating_) {
-        startSimulation(); // re-seed bodies from the fresh scene
+        startSimulation(); // re-seed bodies + particles + scripts from the fresh scene
     }
 }
 
@@ -73,6 +86,10 @@ void Engine::removeTexture(const std::string& key) {
     renderer_.removeTexture(key);
 }
 
+void Engine::loadScript(const std::string& name, const std::string& source) {
+    scripting_.loadScript(name, source);
+}
+
 // ---- Simulation ----
 
 void Engine::startSimulation() {
@@ -92,12 +109,27 @@ void Engine::startSimulation() {
         b.restitution = rec.restitution;
         physics_.addBody(b);
     }
+    particles_.configure(scene_.emitters);
+
+    // Start Lua: bind the live world, run scripts, fire on_start.
+    scripting_.bind(&scene_, &physics_);
+    std::string scriptError;
+    scripting_.start(&scriptError);
+    scripting_.callOnStart();
+    for (const std::string& line : scripting_.logMessages()) {
+        LOGI("%s", line.c_str());
+    }
+    scripting_.logMessages().clear();
+
     simulating_ = true;
-    LOGI("Simulation started (%zu bodies)", physics_.bodies().size());
+    LOGI("Simulation started (%zu bodies, %zu emitters, %zu scripts)",
+         physics_.bodies().size(), scene_.emitters.size(), scene_.scripts.size());
 }
 
 void Engine::stopSimulation() {
     simulating_ = false;
+    scripting_.stop();
+    particles_.clear();
     physics_.clear();
     LOGI("Simulation stopped");
 }
@@ -105,15 +137,21 @@ void Engine::stopSimulation() {
 void Engine::stepSimulation(float dt) {
     if (!simulating_) return;
 
-    // Character-style input: drive the first dynamic body horizontally.
-    for (auto& b : physics_.bodies()) {
-        if (b.bodyType == 1) {
-            if (inputAxisX_ != 0.0f) {
-                b.vx = inputAxisX_ * kCharacterSpeed;
-            }
-            if (inputJump_ && b.grounded) {
-                b.vy = kJumpVelocity;
-                b.grounded = false;
+    // Scripts run first so script-set velocities/positions apply this frame.
+    scripting_.update(dt, inputAxisX_, inputAxisY_, inputJump_);
+
+    // Built-in character controller fallback: if no script drives the dynamic
+    // body, apply the input axis directly.
+    if (scene_.scripts.empty()) {
+        for (auto& b : physics_.bodies()) {
+            if (b.bodyType == 1) {
+                if (inputAxisX_ != 0.0f) {
+                    b.vx = inputAxisX_ * kCharacterSpeed;
+                }
+                if (inputJump_ && b.grounded) {
+                    b.vy = kJumpVelocity;
+                    b.grounded = false;
+                }
             }
         }
     }
@@ -122,11 +160,9 @@ void Engine::stepSimulation(float dt) {
 
     // Write simulated positions back into the render scene.
     for (const auto& b : physics_.bodies()) {
-        for (auto& s : scene_.sprites) {
-            if (s.id == b.id) {
-                s.x = b.x;
-                s.y = b.y;
-            }
+        if (SpriteInstance* s = scene_.findSprite(b.id)) {
+            s->x = b.x;
+            s->y = b.y;
         }
     }
 
@@ -140,6 +176,9 @@ void Engine::stepSimulation(float dt) {
             s.frameIndex = static_cast<int>(t * fps) % frames;
         }
     }
+
+    // Emit + integrate particles.
+    particles_.update(dt);
 }
 
 std::string Engine::snapshotPositionsJson() const {
@@ -153,6 +192,58 @@ std::string Engine::snapshotPositionsJson() const {
     }
     out += "}";
     return out;
+}
+
+namespace {
+std::string jsonEscape(const std::string& s) {
+    std::string out;
+    out.reserve(s.size() + 2);
+    for (char c : s) {
+        switch (c) {
+            case '"': out += "\\\""; break;
+            case '\\': out += "\\\\"; break;
+            case '\n': out += "\\n"; break;
+            case '\r': out += "\\r"; break;
+            case '\t': out += "\\t"; break;
+            default: out += c; break;
+        }
+    }
+    return out;
+}
+
+std::string stringArrayJson(std::vector<std::string>& items) {
+    std::string out = "[";
+    bool first = true;
+    for (const std::string& item : items) {
+        if (!first) out += ",";
+        first = false;
+        out += "\"" + jsonEscape(item) + "\"";
+    }
+    out += "]";
+    items.clear();
+    return out;
+}
+} // namespace
+
+std::string Engine::consumeSoundEventsJson() {
+    return stringArrayJson(scripting_.soundEvents());
+}
+
+std::string Engine::consumeLogsJson() {
+    for (const std::string& line : scripting_.logMessages()) {
+        LOGI("%s", line.c_str());
+    }
+    return stringArrayJson(scripting_.logMessages());
+}
+
+std::string Engine::statsJson() const {
+    char buffer[256];
+    std::snprintf(buffer, sizeof(buffer),
+        "{\"fps\":%.1f,\"frameMs\":%.2f,\"drawCalls\":%d,\"sprites\":%zu,"
+        "\"bodies\":%zu,\"particles\":%zu,\"scripts\":%zu}",
+        fps_, frameMs_, renderer_.lastDrawCalls(), scene_.sprites.size(),
+        physics_.bodies().size(), particles_.totalParticles(), scene_.scripts.size());
+    return std::string(buffer);
 }
 
 // ---- Game view / runtime ----
