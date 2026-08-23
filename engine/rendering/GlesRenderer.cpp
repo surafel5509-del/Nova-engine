@@ -1,0 +1,186 @@
+#include "rendering/GlesRenderer.h"
+
+#include "core/Log.h"
+
+namespace nova {
+
+namespace {
+
+// Fullscreen triangle, positions already in NDC.
+const char* kGridVertexShader = R"GLSL(#version 300 es
+layout(location = 0) in vec2 aNdc;
+out vec2 vNdc;
+void main() {
+    vNdc = aNdc;
+    gl_Position = vec4(aNdc, 0.0, 1.0);
+}
+)GLSL";
+
+// Infinite world-space grid: minor 1u, major 10u, colored axes, zoom fade.
+const char* kGridFragmentShader = R"GLSL(#version 300 es
+precision highp float;
+in vec2 vNdc;
+uniform vec2 uCenter;      // world-space camera center
+uniform vec2 uHalfSizePx;  // viewport half size in pixels
+uniform float uPpu;        // pixels per world unit
+uniform float uVisible;
+out vec4 fragColor;
+
+float gridLine(vec2 p, float spacing) {
+    vec2 q = p / spacing;
+    vec2 g = abs(fract(q - 0.5) - 0.5) / fwidth(q);
+    return 1.0 - min(min(g.x, g.y), 1.0);
+}
+
+void main() {
+    if (uVisible < 0.5) { fragColor = vec4(0.0); return; }
+    vec2 world = uCenter + vNdc * uHalfSizePx / uPpu;
+
+    float minor = gridLine(world, 1.0);
+    float major = gridLine(world, 10.0);
+    float minorFade = clamp((uPpu - 6.0) / 14.0, 0.0, 1.0);
+
+    vec3 color = vec3(0.0);
+    float alpha = 0.0;
+
+    color += vec3(0.22, 0.25, 0.31) * minor * minorFade;
+    alpha = max(alpha, minor * minorFade * 0.35);
+    color += vec3(0.32, 0.36, 0.44) * major;
+    alpha = max(alpha, major * 0.55);
+
+    // Axes: X axis (y = 0) red, Y axis (x = 0) green.
+    float axisX = 1.0 - min(abs(world.y) / max(fwidth(world.y) * 1.5, 1e-6), 1.0);
+    float axisY = 1.0 - min(abs(world.x) / max(fwidth(world.x) * 1.5, 1.0e-6), 1.0);
+    color = mix(color, vec3(0.75, 0.32, 0.32), axisX);
+    alpha = max(alpha, axisX * 0.9);
+    color = mix(color, vec3(0.35, 0.72, 0.38), axisY);
+    alpha = max(alpha, axisY * 0.9);
+
+    fragColor = vec4(color, alpha);
+}
+)GLSL";
+
+constexpr float kBackgroundR = 0.078f;
+constexpr float kBackgroundG = 0.090f;
+constexpr float kBackgroundB = 0.110f;
+
+} // namespace
+
+bool GlesRenderer::initialize(std::string* outError) {
+    if (initialized_) return true;
+
+    std::string error;
+    if (!spriteBatch_.initialize(&error)) {
+        if (outError) *outError = "SpriteBatch: " + error;
+        return false;
+    }
+    if (!gridShader_.build(kGridVertexShader, kGridFragmentShader, &error)) {
+        if (outError) *outError = "Grid shader: " + error;
+        return false;
+    }
+    gridUPpu_ = gridShader_.uniformLocation("uPpu");
+    gridUCenter_ = gridShader_.uniformLocation("uCenter");
+    gridUHalfSize_ = gridShader_.uniformLocation("uHalfSizePx");
+    gridUVisible_ = gridShader_.uniformLocation("uVisible");
+
+    const float fullscreenTriangle[6] = { -1.0f, -1.0f, 3.0f, -1.0f, -1.0f, 3.0f };
+    glGenVertexArrays(1, &gridVao_);
+    glGenBuffers(1, &gridVbo_);
+    glBindVertexArray(gridVao_);
+    glBindBuffer(GL_ARRAY_BUFFER, gridVbo_);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(fullscreenTriangle), fullscreenTriangle, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), nullptr);
+    glBindVertexArray(0);
+
+    if (!whiteTexture_.createSolid(255, 255, 255, 255)) {
+        if (outError) *outError = "Failed to create fallback texture";
+        return false;
+    }
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDisable(GL_DEPTH_TEST);
+
+    initialized_ = true;
+    LOGI("GlesRenderer initialized: GL %s", reinterpret_cast<const char*>(glGetString(GL_VERSION)));
+    return true;
+}
+
+void GlesRenderer::shutdown() {
+    spriteBatch_.shutdown();
+    if (gridVbo_ != 0) { glDeleteBuffers(1, &gridVbo_); gridVbo_ = 0; }
+    if (gridVao_ != 0) { glDeleteVertexArrays(1, &gridVao_); gridVao_ = 0; }
+    textures_.clear();
+    initialized_ = false;
+}
+
+void GlesRenderer::setViewportSize(int width, int height) {
+    viewportWidth_ = width > 0 ? width : 1;
+    viewportHeight_ = height > 0 ? height : 1;
+}
+
+void GlesRenderer::uploadTexture(const std::string& key, const unsigned char* rgba, int width, int height) {
+    Texture texture;
+    if (texture.createFromRgba(rgba, width, height)) {
+        textures_[key] = std::move(texture);
+    } else {
+        LOGE("Failed to upload texture '%s'", key.c_str());
+    }
+}
+
+void GlesRenderer::removeTexture(const std::string& key) {
+    textures_.erase(key);
+}
+
+Mat4 GlesRenderer::computeViewProj() const {
+    const float halfW = viewportWidth_ * 0.5f;
+    const float halfH = viewportHeight_ * 0.5f;
+    const Mat4 proj = Mat4::ortho(-halfW, halfW, -halfH, halfH, -1.0f, 1.0f);
+    const Mat4 view = Mat4::multiply(
+        Mat4::scaling(camera_.pixelsPerUnit, camera_.pixelsPerUnit, 1.0f),
+        Mat4::translation(-camera_.centerX, -camera_.centerY, 0.0f));
+    return Mat4::multiply(proj, view);
+}
+
+void GlesRenderer::drawFrame(const RenderScene& scene) {
+    if (!initialized_) return;
+    glViewport(0, 0, viewportWidth_, viewportHeight_);
+    glClearColor(kBackgroundR, kBackgroundG, kBackgroundB, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    if (gridVisible_) drawGrid();
+    drawSprites(scene);
+}
+
+void GlesRenderer::drawGrid() {
+    gridShader_.use();
+    glUniform1f(gridUPpu_, camera_.pixelsPerUnit);
+    glUniform2f(gridUCenter_, camera_.centerX, camera_.centerY);
+    glUniform2f(gridUHalfSize_, viewportWidth_ * 0.5f, viewportHeight_ * 0.5f);
+    glUniform1f(gridUVisible_, gridVisible_ ? 1.0f : 0.0f);
+    glBindVertexArray(gridVao_);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+    glBindVertexArray(0);
+}
+
+void GlesRenderer::drawSprites(const RenderScene& scene) {
+    const Mat4 viewProj = computeViewProj();
+    spriteBatch_.beginFrame(viewProj);
+    for (const SpriteInstance& sprite : scene.sprites) {
+        GLuint texture = 0;
+        if (!sprite.texture.empty()) {
+            auto it = textures_.find(sprite.texture);
+            if (it != textures_.end()) texture = it->second.id();
+        }
+        spriteBatch_.drawSprite(sprite, texture, whiteTexture_.id());
+    }
+    spriteBatch_.endFrame();
+    for (const SpriteInstance& sprite : scene.sprites) {
+        if (sprite.selected) {
+            spriteBatch_.drawSelectionOutline(sprite, whiteTexture_.id());
+        }
+    }
+}
+
+} // namespace nova
