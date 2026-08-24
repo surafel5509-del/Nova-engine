@@ -105,9 +105,40 @@ struct DirectionalLight {
     float r = 0.95f;
     float g = 0.93f;
     float b = 0.85f;
+    float intensity = 1.0f;
     float ambientR = 0.18f;
     float ambientG = 0.18f;
     float ambientB = 0.20f;
+    std::string type = "directional";   // directional | point | spot | sun | ambient
+};
+
+/** 3D rigid body record (sphere collider). */
+struct Body3DRecord {
+    std::string id;
+    int bodyType = 0;
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+    float radius = 0.5f;
+    float mass = 1.0f;
+    float gravityScale = 1.0f;
+    float friction = 0.5f;
+    float restitution = 0.0f;
+};
+
+/** World/environment settings for the 3D scene. */
+struct WorldEnvironment {
+    float skyR = 0.08f;
+    float skyG = 0.09f;
+    float skyB = 0.12f;
+    float horizonR = 0.12f;
+    float horizonG = 0.13f;
+    float horizonB = 0.18f;
+    float fogDensity = 0.0f;         // 0 = no fog
+    float fogR = 0.5f;
+    float fogG = 0.55f;
+    float fogB = 0.65f;
+    float ambientIntensity = 1.0f;
 };
 
 /** One keyframe on an animation track. */
@@ -189,8 +220,10 @@ struct RenderScene {
     std::vector<ScriptRecord> scripts;
     std::vector<UiElementRecord> uiElements;
     std::vector<Object3DRecord> objects3d;
+    std::vector<Body3DRecord> bodies3d;
     std::vector<AnimationTrack> animations;
     DirectionalLight light;
+    WorldEnvironment world;
     GameCamera gameCamera;
 
     /** Parses JSON; returns false (and leaves *this unchanged) on error. */

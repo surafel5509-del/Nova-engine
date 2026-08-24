@@ -162,8 +162,35 @@ data class UiComponent(
 
 enum class EntityKind {
     EMPTY, SPRITE, CAMERA, PHYSICS_BODY, ANIMATED_SPRITE, PARTICLE_SYSTEM,
-    TILEMAP, AUDIO_SOURCE, UI_ELEMENT, MESH3D, LIGHT3D,
+    TILEMAP, AUDIO_SOURCE, UI_ELEMENT, MESH3D, LIGHT3D, PHYSICS_BODY_3D,
 }
+
+/** 3D rigid body (sphere collider). */
+@Serializable
+data class PhysicsBody3DComponent(
+    val bodyType: String = "dynamic",  // static | dynamic | kinematic
+    val radius: Float = 0.5f,
+    val mass: Float = 1f,
+    val gravityScale: Float = 1f,
+    val friction: Float = 0.5f,
+    val restitution: Float = 0f,
+)
+
+/** World/environment settings (sky, fog, ambient) — usually on one entity. */
+@Serializable
+data class WorldEnvironmentComponent(
+    val skyR: Float = 0.08f,
+    val skyG: Float = 0.09f,
+    val skyB: Float = 0.12f,
+    val horizonR: Float = 0.12f,
+    val horizonG: Float = 0.13f,
+    val horizonB: Float = 0.18f,
+    val fogDensity: Float = 0f,
+    val fogR: Float = 0.5f,
+    val fogG: Float = 0.55f,
+    val fogB: Float = 0.65f,
+    val ambientIntensity: Float = 1f,
+)
 
 /** A 3D primitive object (cube, cylinder, ground plane). */
 @Serializable
@@ -185,9 +212,11 @@ data class LightComponent(
     val r: Float = 0.95f,
     val g: Float = 0.93f,
     val b: Float = 0.85f,
+    val intensity: Float = 1f,
     val ambientR: Float = 0.18f,
     val ambientG: Float = 0.18f,
     val ambientB: Float = 0.20f,
+    val type: String = "directional",   // directional | point | spot | sun | ambient
 )
 
 /** One keyframe on an animation track. */
@@ -235,11 +264,14 @@ data class Entity(
     val mesh: MeshComponent? = null,
     val light: LightComponent? = null,
     val animation: AnimationClipComponent? = null,
+    val physicsBody3d: PhysicsBody3DComponent? = null,
+    val world: WorldEnvironmentComponent? = null,
 ) {
     val kind: EntityKind
         get() = when {
             camera != null -> EntityKind.CAMERA
             mesh != null -> EntityKind.MESH3D
+            physicsBody3d != null -> EntityKind.PHYSICS_BODY_3D
             light != null -> EntityKind.LIGHT3D
             ui != null -> EntityKind.UI_ELEMENT
             tilemap != null -> EntityKind.TILEMAP
@@ -285,6 +317,10 @@ object SceneOps {
             EntityKind.UI_ELEMENT -> base.copy(ui = UiComponent())
             EntityKind.MESH3D -> base.copy(mesh = MeshComponent())
             EntityKind.LIGHT3D -> base.copy(light = LightComponent())
+            EntityKind.PHYSICS_BODY_3D -> base.copy(
+                mesh = MeshComponent(),
+                physicsBody3d = PhysicsBody3DComponent(),
+            )
         }
     }
 
@@ -300,6 +336,7 @@ object SceneOps {
         EntityKind.UI_ELEMENT -> "UI Element"
         EntityKind.MESH3D -> "3D Object"
         EntityKind.LIGHT3D -> "Light"
+        EntityKind.PHYSICS_BODY_3D -> "3D Body"
     }
 
     fun add(scene: Scene, entity: Entity): Scene {
@@ -572,7 +609,30 @@ data class RenderObject3D(
 data class RenderLight(
     val dirX: Float, val dirY: Float, val dirZ: Float,
     val r: Float, val g: Float, val b: Float,
+    val intensity: Float,
     val ambientR: Float, val ambientG: Float, val ambientB: Float,
+    val type: String = "directional",
+)
+
+@Serializable
+data class RenderBody3D(
+    val id: String,
+    val bodyType: Int,
+    val x: Float, val y: Float, val z: Float,
+    val radius: Float,
+    val mass: Float,
+    val gravityScale: Float,
+    val friction: Float,
+    val restitution: Float,
+)
+
+@Serializable
+data class RenderWorld(
+    val skyR: Float, val skyG: Float, val skyB: Float,
+    val horizonR: Float, val horizonG: Float, val horizonB: Float,
+    val fogDensity: Float,
+    val fogR: Float, val fogG: Float, val fogB: Float,
+    val ambientIntensity: Float,
 )
 
 @Serializable
@@ -599,7 +659,9 @@ data class RenderScene(
     val scripts: List<RenderScript> = emptyList(),
     val uiElements: List<RenderUiElement> = emptyList(),
     val objects3d: List<RenderObject3D> = emptyList(),
+    val bodies3d: List<RenderBody3D> = emptyList(),
     val light: RenderLight? = null,
+    val world: RenderWorld? = null,
     val animations: List<RenderAnimationTrack> = emptyList(),
 )
 
@@ -766,7 +828,37 @@ fun buildRenderScene(scene: Scene, selectedId: String?, mode3d: Boolean = false)
         RenderLight(
             dirX = l.dirX, dirY = l.dirY, dirZ = l.dirZ,
             r = l.r, g = l.g, b = l.b,
+            intensity = l.intensity,
             ambientR = l.ambientR, ambientG = l.ambientG, ambientB = l.ambientB,
+            type = l.type,
+        )
+    }
+
+    val bodies3d = scene.entities
+        .filter { it.enabled && it.physicsBody3d != null && isChainEnabled(scene, it) }
+        .map { e ->
+            val wt = SceneOps.worldTransform(scene, e.id)
+            val p = e.physicsBody3d!!
+            RenderBody3D(
+                id = e.id,
+                bodyType = bodyTypeToInt(p.bodyType),
+                x = wt.x, y = wt.y, z = wt.z,
+                radius = p.radius,
+                mass = p.mass,
+                gravityScale = p.gravityScale,
+                friction = p.friction,
+                restitution = p.restitution,
+            )
+        }
+
+    val worldEntity = scene.entities.firstOrNull { it.enabled && it.world != null }
+    val world = worldEntity?.world?.let { w ->
+        RenderWorld(
+            skyR = w.skyR, skyG = w.skyG, skyB = w.skyB,
+            horizonR = w.horizonR, horizonG = w.horizonG, horizonB = w.horizonB,
+            fogDensity = w.fogDensity,
+            fogR = w.fogR, fogG = w.fogG, fogB = w.fogB,
+            ambientIntensity = w.ambientIntensity,
         )
     }
 
@@ -794,7 +886,9 @@ fun buildRenderScene(scene: Scene, selectedId: String?, mode3d: Boolean = false)
         scripts = scripts,
         uiElements = uiElements,
         objects3d = objects3d,
+        bodies3d = bodies3d,
         light = light,
+        world = world,
         animations = animations,
     )
 }

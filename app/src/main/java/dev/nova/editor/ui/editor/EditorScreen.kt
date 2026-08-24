@@ -122,40 +122,50 @@ fun EditorScreen(
 
             if (isWideLayout) {
                 Row(Modifier.weight(1f)) {
-                    HierarchyPanel(viewModel, Modifier.width(220.dp).fillMaxHeight())
+                    HierarchyPanel(
+                        viewModel,
+                        Modifier.width(200.dp).fillMaxHeight(),
+                    )
                     VerticalDivider(color = NovaColors.PanelBorder)
                     Column(Modifier.weight(1f).fillMaxHeight()) {
                         ViewportWithOverlay(viewModel, Modifier.weight(1f).fillMaxWidth())
                         HorizontalDivider(color = NovaColors.PanelBorder)
-                        ConsolePanel(viewModel, Modifier.height(120.dp).fillMaxWidth())
+                        ConsolePanel(viewModel, Modifier.height(110.dp).fillMaxWidth())
                     }
                     VerticalDivider(color = NovaColors.PanelBorder)
-                    InspectorPanel(viewModel, importTexture, Modifier.width(280.dp).fillMaxHeight())
+                    InspectorPanel(
+                        viewModel,
+                        importTexture,
+                        Modifier.width(300.dp).fillMaxHeight(),
+                    )
                 }
             } else {
-                // Compact layout: viewport on top, tabbed panels below.
+                // Compact layout: viewport on top, tabbed panels below. The
+                // panel area flexes with the window so nothing is cut off.
                 var bottomTab by remember { mutableStateOf(BottomTab.HIERARCHY) }
-                ViewportWithOverlay(viewModel, Modifier.weight(1f).fillMaxWidth())
-                HorizontalDivider(color = NovaColors.PanelBorder)
-                TabRow(selectedTabIndex = bottomTab.ordinal) {
-                    BottomTab.entries.forEach { tab ->
-                        Tab(
-                            selected = bottomTab == tab,
-                            onClick = { bottomTab = tab },
-                            text = { Text(tab.label) },
-                        )
+                Column(Modifier.weight(1f)) {
+                    ViewportWithOverlay(viewModel, Modifier.weight(0.55f).fillMaxWidth())
+                    HorizontalDivider(color = NovaColors.PanelBorder)
+                    TabRow(selectedTabIndex = bottomTab.ordinal) {
+                        BottomTab.entries.forEach { tab ->
+                            Tab(
+                                selected = bottomTab == tab,
+                                onClick = { bottomTab = tab },
+                                text = { Text(tab.label) },
+                            )
+                        }
                     }
-                }
-                BoxWithConstraints(Modifier.fillMaxWidth().height(260.dp)) {
-                    when (bottomTab) {
-                        BottomTab.HIERARCHY -> HierarchyPanel(viewModel)
-                        BottomTab.INSPECTOR -> InspectorPanel(viewModel, importTexture)
-                        BottomTab.ASSETS -> AssetsLibraryPanel(viewModel)
-                        BottomTab.FILES -> FileManagerPanel(viewModel)
-                        BottomTab.SCRIPTS -> ScriptEditorPanel(viewModel)
-                        BottomTab.TIMELINE -> TimelinePanel(viewModel)
-                        BottomTab.AI -> AiAssistantPanel(viewModel)
-                        BottomTab.CONSOLE -> ConsolePanel(viewModel)
+                    BoxWithConstraints(Modifier.weight(0.45f).fillMaxWidth()) {
+                        when (bottomTab) {
+                            BottomTab.HIERARCHY -> HierarchyPanel(viewModel)
+                            BottomTab.INSPECTOR -> InspectorPanel(viewModel, importTexture)
+                            BottomTab.ASSETS -> AssetsLibraryPanel(viewModel)
+                            BottomTab.FILES -> FileManagerPanel(viewModel)
+                            BottomTab.SCRIPTS -> ScriptEditorPanel(viewModel)
+                            BottomTab.TIMELINE -> TimelinePanel(viewModel)
+                            BottomTab.AI -> AiAssistantPanel(viewModel)
+                            BottomTab.CONSOLE -> ConsolePanel(viewModel)
+                        }
                     }
                 }
             }
@@ -248,13 +258,14 @@ private fun EditorToolbar(
             Text("Redo")
         }
 
-        VerticalDivider(modifier = Modifier.height(24.dp), color = NovaColors.PanelBorder)
+        VerticalDivider(modifier = Modifier.height(28.dp), color = NovaColors.PanelBorder)
 
+        // Tool palette: all editor tools with icons, horizontally scrollable.
         EditorTool.entries.forEach { tool ->
             FilterChip(
                 selected = viewModel.activeTool == tool,
                 onClick = { viewModel.setTool(tool) },
-                label = { Text(tool.label, style = MaterialTheme.typography.labelSmall) },
+                label = { Text("${tool.icon} ${tool.label}", style = MaterialTheme.typography.labelSmall) },
                 modifier = Modifier.padding(horizontal = 2.dp),
             )
         }

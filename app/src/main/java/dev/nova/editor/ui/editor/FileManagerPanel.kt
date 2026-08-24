@@ -31,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.nova.editor.assets.AssetEntry
@@ -52,11 +53,21 @@ fun FileManagerPanel(
     val store = remember(viewModel.projectPath) { AssetStore(viewModel.projectPath) }
     var currentDir by remember { mutableStateOf("") }
     var revision by remember { mutableStateOf(0) }
-    val entries = remember(currentDir, revision) { store.list(currentDir) }
+    var searchQuery by remember { mutableStateOf("") }
+    var sortBySize by remember { mutableStateOf(false) }
+    val entries = remember(currentDir, revision, searchQuery, sortBySize) {
+        var list = store.list(currentDir)
+        if (searchQuery.isNotBlank()) {
+            list = list.filter { it.name.lowercase().contains(searchQuery.lowercase()) }
+        }
+        if (sortBySize) list.sortedWith(compareBy({ !it.isDirectory }, { -it.sizeBytes })) else list
+    }
 
     var dialog by remember { mutableStateOf<FileDialog?>(null) }
     var dialogText by remember { mutableStateOf("") }
     var moveSource by remember { mutableStateOf<AssetEntry?>(null) }
+    var clipboardPath by remember { mutableStateOf<String?>(null) }
+    var previewEntry by remember { mutableStateOf<AssetEntry?>(null) }
 
     val zipLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let {
@@ -88,6 +99,32 @@ fun FileManagerPanel(
             TextButton(onClick = { dialog = FileDialog.NEW_FILE }) { Text("+ File") }
             TextButton(onClick = { zipLauncher.launch("application/zip") }) { Text("ZIP") }
         }
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text("Search / filter…", style = MaterialTheme.typography.bodySmall) },
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodySmall,
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = { sortBySize = !sortBySize }) {
+                Text(if (sortBySize) "Sort: size" else "Sort: name", style = MaterialTheme.typography.labelSmall)
+            }
+            clipboardPath?.let {
+                TextButton(onClick = {
+                    if (store.copyTo(it, currentDir) != null) {
+                        viewModel.log(LogLevel.INFO, "Pasted into '$currentDir'")
+                        revision++
+                    }
+                }) { Text("Paste", style = MaterialTheme.typography.labelSmall) }
+            }
+            TextButton(onClick = {
+                val outFile = java.io.File(viewModel.projectPath, "export.zip")
+                val count = store.exportZip(currentDir.ifBlank { "assets" }, outFile)
+                viewModel.log(LogLevel.INFO, "Exported $count files to export.zip")
+            }) { Text("Export ZIP", style = MaterialTheme.typography.labelSmall) }
+        }
         Spacer(Modifier.height(4.dp))
 
         if (entries.isEmpty()) {
@@ -99,7 +136,10 @@ fun FileManagerPanel(
                 items(entries, key = { it.relativePath }) { entry ->
                     FileRow(
                         entry = entry,
-                        onOpen = { if (entry.isDirectory) currentDir = entry.relativePath },
+                        onOpen = {
+                            if (entry.isDirectory) currentDir = entry.relativePath
+                            else previewEntry = entry
+                        },
                         onRename = { dialog = FileDialog.RENAME; dialogText = entry.name; moveSource = entry },
                         onMove = {
                             // Move up one level (simple, reliable on mobile).
@@ -107,6 +147,13 @@ fun FileManagerPanel(
                             val grand = parent.substringBeforeLast('/', "")
                             if (store.move(entry.relativePath, grand) != null) {
                                 viewModel.log(LogLevel.INFO, "Moved '${entry.name}' up")
+                                revision++
+                            }
+                        },
+                        onCopy = { clipboardPath = entry.relativePath },
+                        onDuplicate = {
+                            store.duplicate(entry.relativePath)?.let {
+                                viewModel.log(LogLevel.INFO, "Duplicated '${entry.name}'")
                                 revision++
                             }
                         },
@@ -120,6 +167,38 @@ fun FileManagerPanel(
                 }
             }
         }
+    }
+
+    // File preview dialog (image + text).
+    previewEntry?.let { entry ->
+        AlertDialog(
+            onDismissRequest = { previewEntry = null },
+            title = { Text(entry.name) },
+            text = {
+                if (entry.isTexture) {
+                    val bitmap = remember(entry.relativePath) {
+                        store.readBytes(entry.relativePath)?.let {
+                            android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size)
+                        }
+                    }
+                    if (bitmap != null) {
+                        androidx.compose.foundation.Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = entry.name,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    } else {
+                        Text("Could not decode image.", color = NovaColors.Warning)
+                    }
+                } else {
+                    val text = remember(entry.relativePath) {
+                        store.readBytes(entry.relativePath)?.decodeToString()?.take(2000) ?: "(binary)"
+                    }
+                    Text(text, style = MaterialTheme.typography.bodySmall, color = NovaColors.TextDim)
+                }
+            },
+            confirmButton = { TextButton(onClick = { previewEntry = null }) { Text("Close") } },
+        )
     }
 
     if (dialog == FileDialog.NEW_FOLDER || dialog == FileDialog.NEW_FILE || dialog == FileDialog.RENAME) {
@@ -166,6 +245,8 @@ private fun FileRow(
     onOpen: () -> Unit,
     onRename: () -> Unit,
     onMove: () -> Unit,
+    onCopy: () -> Unit,
+    onDuplicate: () -> Unit,
     onDelete: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
@@ -201,6 +282,8 @@ private fun FileRow(
             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                 DropdownMenuItem(text = { Text("Rename") }, onClick = { onRename(); menuExpanded = false })
                 DropdownMenuItem(text = { Text("Move up") }, onClick = { onMove(); menuExpanded = false })
+                DropdownMenuItem(text = { Text("Copy") }, onClick = { onCopy(); menuExpanded = false })
+                DropdownMenuItem(text = { Text("Duplicate") }, onClick = { onDuplicate(); menuExpanded = false })
                 DropdownMenuItem(
                     text = { Text("Delete", color = NovaColors.Error) },
                     onClick = { onDelete(); menuExpanded = false },

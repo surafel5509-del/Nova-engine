@@ -23,7 +23,28 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 
-enum class EditorTool(val label: String) { SELECT("Select"), MOVE("Move"), TILE("Tile"), PAN("Pan"), ZOOM("Zoom") }
+enum class EditorTool(val label: String, val icon: String) {
+    SELECT("Select", "➤"),
+    MOVE("Move", "✥"),
+    ROTATE("Rotate", "⟳"),
+    SCALE("Scale", "⤢"),
+    RECT("Rect", "▭"),
+    PAN("Pan", "✋"),
+    ZOOM("Zoom", "🔍"),
+    TILE("Tile", "▦"),
+    TILE_BRUSH("Brush", "🖌"),
+    TILE_ERASER("Eraser", "🧽"),
+    TILE_PICKER("Picker", "💧"),
+    SPRITE("Sprite", "🖼"),
+    ANIMATION("Animation", "🎞"),
+    UI_BUILDER("UI", "🔲"),
+    PARTICLES("Particles", "✨"),
+    PHYSICS("Physics", "⚛"),
+    CAMERA("Camera", "🎥"),
+    AUDIO("Audio", "🔊"),
+    LIGHT("Light", "💡"),
+    SCRIPT("Script", "📜"),
+}
 
 enum class LogLevel { INFO, WARNING, ERROR }
 
@@ -271,13 +292,29 @@ class EditorViewModel(
         bumpRender()
     }
 
+    fun rotateEntityBy(id: String, degrees: Float) {
+        val entity = SceneOps.find(scene, id) ?: return
+        val t = entity.transform
+        scene = SceneOps.update(scene, id) { it.copy(transform = t.copy(rotation = t.rotation + degrees)) }
+        bumpRender()
+    }
+
+    fun scaleEntityBy(id: String, delta: Float) {
+        val entity = SceneOps.find(scene, id) ?: return
+        val t = entity.transform
+        val newX = (t.scaleX + delta).coerceIn(0.1f, 20f)
+        val newY = (t.scaleY + delta).coerceIn(0.1f, 20f)
+        scene = SceneOps.update(scene, id) { it.copy(transform = t.copy(scaleX = newX, scaleY = newY)) }
+        bumpRender()
+    }
+
     fun endEntityDrag(id: String) {
         val original = dragOriginal ?: return
         dragOriginal = null
         val current = SceneOps.find(scene, id) ?: return
         if (current.transform != original.transform) {
-            undoStack.pushPreApplied(scene, SnapshotEntityCommand(id, "Move entity", original, current))
-            markChanged("Moved '${original.name}'")
+            undoStack.pushPreApplied(scene, SnapshotEntityCommand(id, "Transform entity", original, current))
+            markChanged("Transformed '${original.name}'")
         }
     }
 

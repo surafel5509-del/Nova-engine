@@ -133,6 +133,7 @@ int runPhysicsTests();
 int runParticleTests();
 int runScriptingTests();
 int run3DTests();
+int runPhysics3DTests();
 
 int main() {
     testSceneParsing();
@@ -146,7 +147,9 @@ int main() {
     const int particleFailures = runParticleTests();
     const int scriptingFailures = runScriptingTests();
     const int threeDFailures = run3DTests();
-    const int total = failures + physicsFailures + particleFailures + scriptingFailures + threeDFailures;
+    const int physics3dFailures = runPhysics3DTests();
+    const int total = failures + physicsFailures + particleFailures + scriptingFailures +
+        threeDFailures + physics3dFailures;
     std::printf("TOTAL: %d failures\n", total);
     return total == 0 ? 0 : 1;
 }

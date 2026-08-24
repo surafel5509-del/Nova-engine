@@ -298,6 +298,9 @@ private suspend fun PointerInputScope.handleViewportGestures(
                         viewModel.activeTool == EditorTool.PAN -> GestureMode.CAMERA_PAN
                         viewModel.activeTool == EditorTool.ZOOM -> GestureMode.CAMERA_ZOOM
                         viewModel.activeTool == EditorTool.TILE -> GestureMode.TILE_PAINT
+                        viewModel.activeTool == EditorTool.TILE_BRUSH -> GestureMode.TILE_PAINT
+                        viewModel.activeTool == EditorTool.TILE_ERASER -> GestureMode.TILE_PAINT
+                        viewModel.activeTool == EditorTool.TILE_PICKER -> GestureMode.TILE_PAINT
                         else -> {
                             val world = screenToWorld(startPos)
                             val hit = viewModel.pickAt(world.x, world.y)
@@ -318,7 +321,19 @@ private suspend fun PointerInputScope.handleViewportGestures(
                     when (mode) {
                         GestureMode.ENTITY_DRAG -> draggedEntityId?.let { id ->
                             val ppu = viewModel.camera.pixelsPerUnit
-                            viewModel.moveEntityBy(id, delta.x / ppu, -delta.y / ppu)
+                            when (viewModel.activeTool) {
+                                EditorTool.ROTATE ->
+                                    viewModel.rotateEntityBy(id, -delta.x * 0.4f)
+                                EditorTool.SCALE -> {
+                                    viewModel.scaleEntityBy(id, -delta.y / 200f)
+                                }
+                                EditorTool.RECT -> {
+                                    viewModel.moveEntityBy(id, delta.x / ppu, -delta.y / ppu)
+                                    viewModel.scaleEntityBy(id, -delta.y / 400f)
+                                }
+                                else ->
+                                    viewModel.moveEntityBy(id, delta.x / ppu, -delta.y / ppu)
+                            }
                         }
                         GestureMode.TILE_PAINT -> {
                             val world = screenToWorld(position)

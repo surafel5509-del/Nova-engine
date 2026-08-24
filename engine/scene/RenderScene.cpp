@@ -161,9 +161,44 @@ bool RenderScene::parseFrom(const std::string& jsonText, std::string* outError) 
         next.light.r = getFloat(jl, "r", 0.95f);
         next.light.g = getFloat(jl, "g", 0.93f);
         next.light.b = getFloat(jl, "b", 0.85f);
+        next.light.intensity = getFloat(jl, "intensity", 1.0f);
         next.light.ambientR = getFloat(jl, "ambientR", 0.18f);
         next.light.ambientG = getFloat(jl, "ambientG", 0.18f);
         next.light.ambientB = getFloat(jl, "ambientB", 0.20f);
+        next.light.type = getString(jl, "type", "directional");
+    }
+
+    if (root.contains("bodies3d") && root["bodies3d"].is_array()) {
+        for (const auto& jb : root["bodies3d"]) {
+            if (!jb.is_object()) continue;
+            Body3DRecord b;
+            b.id = getString(jb, "id", "");
+            b.bodyType = getInt(jb, "bodyType", 0);
+            b.x = getFloat(jb, "x", 0.0f);
+            b.y = getFloat(jb, "y", 0.0f);
+            b.z = getFloat(jb, "z", 0.0f);
+            b.radius = getFloat(jb, "radius", 0.5f);
+            b.mass = getFloat(jb, "mass", 1.0f);
+            b.gravityScale = getFloat(jb, "gravityScale", 1.0f);
+            b.friction = getFloat(jb, "friction", 0.5f);
+            b.restitution = getFloat(jb, "restitution", 0.0f);
+            next.bodies3d.push_back(std::move(b));
+        }
+    }
+
+    if (root.contains("world") && root["world"].is_object()) {
+        const auto& jw = root["world"];
+        next.world.skyR = getFloat(jw, "skyR", 0.08f);
+        next.world.skyG = getFloat(jw, "skyG", 0.09f);
+        next.world.skyB = getFloat(jw, "skyB", 0.12f);
+        next.world.horizonR = getFloat(jw, "horizonR", 0.12f);
+        next.world.horizonG = getFloat(jw, "horizonG", 0.13f);
+        next.world.horizonB = getFloat(jw, "horizonB", 0.18f);
+        next.world.fogDensity = getFloat(jw, "fogDensity", 0.0f);
+        next.world.fogR = getFloat(jw, "fogR", 0.5f);
+        next.world.fogG = getFloat(jw, "fogG", 0.55f);
+        next.world.fogB = getFloat(jw, "fogB", 0.65f);
+        next.world.ambientIntensity = getFloat(jw, "ambientIntensity", 1.0f);
     }
 
     if (root.contains("animations") && root["animations"].is_array()) {

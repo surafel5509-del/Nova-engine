@@ -14,12 +14,14 @@ target_include_directories(lua PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../third_party
 add_executable(nova_tests
     test_main.cpp
     test_physics.cpp
+    test_physics3d.cpp
     test_particles.cpp
     test_scripting.cpp
     test_3d.cpp
     ../scene/RenderScene.cpp
     ../scene/AnimationSampler.cpp
     ../physics/PhysicsWorld.cpp
+    ../physics/PhysicsWorld3D.cpp
     ../particles/ParticleSystem.cpp
     ../scripting/LuaScriptEngine.cpp
     ../rendering/Mesh3D.cpp

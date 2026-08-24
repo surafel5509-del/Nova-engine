@@ -119,4 +119,57 @@ class AssetStore(private val projectPath: String) {
         }
         return count
     }
+
+    /** Duplicates a file next to the original (adds "_copy"). Returns the new path. */
+    fun duplicate(relativePath: String): String? {
+        val src = File(projectPath, relativePath)
+        if (!src.isFile) return null
+        val dot = src.name.lastIndexOf('.')
+        val newName = if (dot > 0) "${src.name.substring(0, dot)}_copy${src.name.substring(dot)}" else "${src.name}_copy"
+        val dest = File(src.parentFile, newName)
+        var target = dest
+        var n = 2
+        while (target.exists()) {
+            target = File(src.parentFile, if (dot > 0) "${src.name.substring(0, dot)}_copy$n${src.name.substring(dot)}" else "${src.name}_copy$n")
+            n++
+        }
+        src.copyTo(target)
+        val rel = File(projectPath).toURI().relativize(target.toURI()).path.trimEnd('/')
+        return rel
+    }
+
+    /** Copies a file into another directory (paste). Returns the new path or null. */
+    fun copyTo(relativePath: String, destDirRelative: String): String? {
+        val src = File(projectPath, relativePath)
+        if (!src.isFile) return null
+        val destDir = File(projectPath, destDirRelative).apply { mkdirs() }
+        var target = File(destDir, src.name)
+        var n = 2
+        while (target.exists()) {
+            val dot = src.name.lastIndexOf('.')
+            target = File(destDir, if (dot > 0) "${src.name.substring(0, dot)}_$n${src.name.substring(dot)}" else "${src.name}_$n")
+            n++
+        }
+        src.copyTo(target)
+        return File(projectPath).toURI().relativize(target.toURI()).path.trimEnd('/')
+    }
+
+    /** Exports a directory as a ZIP. Returns the zip file. */
+    fun exportZip(relativeDir: String, outFile: File): Int {
+        val root = File(projectPath, relativeDir)
+        require(root.isDirectory) { "Not a directory: $relativeDir" }
+        outFile.parentFile?.mkdirs()
+        var count = 0
+        java.util.zip.ZipOutputStream(outFile.outputStream().buffered()).use { zip ->
+            val base = root.toPath()
+            root.walkTopDown().filter { it.isFile }.forEach { file ->
+                val rel = base.relativize(file.toPath()).toString().replace(File.separatorChar, '/')
+                zip.putNextEntry(java.util.zip.ZipEntry(rel))
+                file.inputStream().use { it.copyTo(zip) }
+                zip.closeEntry()
+                count++
+            }
+        }
+        return count
+    }
 }

@@ -148,7 +148,8 @@ Mat4 Renderer3D::modelMatrix(const Object3DRecord& obj) const {
 void Renderer3D::drawFrame(const RenderScene& scene) {
     if (!initialized_) return;
     glViewport(0, 0, viewportWidth_, viewportHeight_);
-    glClearColor(clearR_, clearG_, clearB_, 1.0f);
+    // Sky from the world environment.
+    glClearColor(scene.world.skyR, scene.world.skyG, scene.world.skyB, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glEnable(GL_DEPTH_TEST);
 
@@ -183,14 +184,18 @@ void Renderer3D::drawObjects(const RenderScene& scene) {
     const Mat4 vp = viewProj();
     glUniformMatrix4fv(shader3d_.uniformLocation("uViewProj"), 1, GL_FALSE, vp.m);
 
-    // Light from the scene (or a sensible default).
+    // Light from the scene (or a sensible default); intensity scales color.
     float lx = -0.4f, ly = -1.0f, lz = -0.3f;
     float lr = 0.95f, lg = 0.93f, lb = 0.85f;
     float ar = 0.18f, ag = 0.18f, ab = 0.20f;
     if (scene.light.present) {
         lx = scene.light.dirX; ly = scene.light.dirY; lz = scene.light.dirZ;
-        lr = scene.light.r; lg = scene.light.g; lb = scene.light.b;
-        ar = scene.light.ambientR; ag = scene.light.ambientG; ab = scene.light.ambientB;
+        lr = scene.light.r * scene.light.intensity;
+        lg = scene.light.g * scene.light.intensity;
+        lb = scene.light.b * scene.light.intensity;
+        ar = scene.light.ambientR * scene.world.ambientIntensity;
+        ag = scene.light.ambientG * scene.world.ambientIntensity;
+        ab = scene.light.ambientB * scene.world.ambientIntensity;
     }
     glUniform3f(shader3d_.uniformLocation("uLightDir"), lx, ly, lz);
     glUniform3f(shader3d_.uniformLocation("uLightColor"), lr, lg, lb);

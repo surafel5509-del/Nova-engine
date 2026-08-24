@@ -35,12 +35,12 @@ import dev.nova.editor.ui.theme.NovaColors
 
 private val ANIMATED_PROPERTIES = listOf("x", "y", "rotation", "scaleX", "scaleY")
 private const val TIMELINE_SECONDS = 10f
-private val PX_PER_SECOND = 28.dp
+private val PX_PER_SECOND = 30.dp
 
 /**
- * Animation timeline: tracks (x, y, rotation, scaleX, scaleY) with keyframe
- * markers on a time ruler. Add/remove tracks and keyframes; the engine
- * samples them during Play.
+ * Professional animation timeline: playback controls, playhead, time ruler,
+ * per-track keyframe markers, add/delete/move/copy/paste keyframes, loop.
+ * Tracks sample natively during Play.
  */
 @Composable
 fun TimelinePanel(
@@ -48,8 +48,13 @@ fun TimelinePanel(
     modifier: Modifier = Modifier,
 ) {
     val selected = viewModel.selectedId?.let { SceneOps.find(viewModel.scene, it) }
+    var playing by remember { mutableStateOf(false) }
+    var loop by remember { mutableStateOf(true) }
+    var playheadSec by remember { mutableStateOf(0f) }
+    var clipboard by remember { mutableStateOf<AnimationKey?>(null) }
 
     Column(modifier.fillMaxWidth().padding(8.dp)) {
+        // Header + playback controls.
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 "Timeline — ${selected?.name ?: "no selection"}",
@@ -65,17 +70,31 @@ fun TimelinePanel(
                         ANIMATED_PROPERTIES.forEach { prop ->
                             DropdownMenuItem(
                                 text = { Text(prop) },
-                                onClick = {
-                                    addTrack(viewModel, selected.id, prop)
-                                    addMenu = false
-                                },
+                                onClick = { addTrack(viewModel, selected.id, prop); addMenu = false },
                             )
                         }
                     }
                 }
             }
         }
-        Spacer(Modifier.height(6.dp))
+
+        // Playback row.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = { playheadSec = 0f; playing = false }) { Text("⏮") }
+            TextButton(onClick = { playheadSec = (playheadSec - 0.1f).coerceAtLeast(0f) }) { Text("⏴") }
+            TextButton(onClick = { playing = !playing }) { Text(if (playing) "⏸" else "▶") }
+            TextButton(onClick = { playing = false }) { Text("⏹") }
+            TextButton(onClick = { playheadSec = (playheadSec + 0.1f).coerceAtMost(TIMELINE_SECONDS) }) { Text("⏵") }
+            TextButton(onClick = { loop = !loop }) {
+                Text(if (loop) "🔁" else "🔂", color = if (loop) NovaColors.Accent else NovaColors.TextDim)
+            }
+            Text(
+                "%.1fs".format(playheadSec),
+                style = MaterialTheme.typography.labelSmall,
+                color = NovaColors.TextDim,
+            )
+        }
+        Spacer(Modifier.height(4.dp))
 
         if (selected == null) {
             Text(
@@ -96,9 +115,9 @@ fun TimelinePanel(
             return@Column
         }
 
-        // Time ruler.
+        // Time ruler with playhead.
         Row(Modifier.horizontalScroll(rememberScrollState())) {
-            Spacer(Modifier.width(70.dp))
+            Spacer(Modifier.width(80.dp))
             for (sec in 0..TIMELINE_SECONDS.toInt()) {
                 Text(
                     "${sec}s",
@@ -112,12 +131,17 @@ fun TimelinePanel(
         clip.tracks.forEachIndexed { index, track ->
             TrackRow(
                 track = track,
-                onAddKey = { addKeyAtHalf(viewModel, selected.id, index) },
+                playheadSec = playheadSec,
+                onAddKey = { addKeyAtPlayhead(viewModel, selected.id, index, playheadSec) },
+                onDeleteKey = { keyIndex -> deleteKey(viewModel, selected.id, index, keyIndex) },
+                onMoveKey = { keyIndex, delta -> moveKey(viewModel, selected.id, index, keyIndex, delta) },
+                onCopyKey = { keyIndex -> clipboard = track.keys.getOrNull(keyIndex) },
+                onPasteKey = { clipboard?.let { pasteKey(viewModel, selected.id, index, it) } },
                 onRemoveTrack = { removeTrack(viewModel, selected.id, index) },
             )
         }
         Text(
-            "Animations play during Play mode (loops by default).",
+            if (playing) "Playing preview…" else "Animations play during Play mode (loops by default).",
             style = MaterialTheme.typography.bodySmall,
             color = NovaColors.TextDim,
         )
@@ -127,9 +151,15 @@ fun TimelinePanel(
 @Composable
 private fun TrackRow(
     track: AnimationTrackData,
+    playheadSec: Float,
     onAddKey: () -> Unit,
+    onDeleteKey: (Int) -> Unit,
+    onMoveKey: (Int, Float) -> Unit,
+    onCopyKey: (Int) -> Unit,
+    onPasteKey: () -> Unit,
     onRemoveTrack: () -> Unit,
 ) {
+    var keyMenuIndex by remember { mutableStateOf<Int?>(null) }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -140,28 +170,46 @@ private fun TrackRow(
             track.property,
             style = MaterialTheme.typography.labelSmall,
             color = NovaColors.Primary,
-            modifier = Modifier.width(70.dp),
+            modifier = Modifier.width(80.dp),
         )
         Row(Modifier.horizontalScroll(rememberScrollState()).weight(1f)) {
             Box(
                 Modifier
-                    .height(22.dp)
+                    .height(26.dp)
                     .width((TIMELINE_SECONDS * PX_PER_SECOND.value).dp)
                     .background(NovaColors.SurfaceVariant),
             ) {
-                track.keys.forEach { key ->
-                    Box(
-                        Modifier
+                track.keys.forEachIndexed { keyIndex, key ->
+                    TextButton(
+                        onClick = { keyMenuIndex = keyIndex },
+                        modifier = Modifier
                             .padding(start = (key.t * PX_PER_SECOND.value).dp)
-                            .width(8.dp)
-                            .height(22.dp)
-                            .background(NovaColors.Accent, CircleShape),
-                    )
+                            .width(10.dp)
+                            .height(26.dp),
+                    ) {
+                        Box(Modifier.width(8.dp).height(26.dp).background(NovaColors.Accent, CircleShape))
+                    }
                 }
             }
         }
         TextButton(onClick = onAddKey) { Text("+Key", style = MaterialTheme.typography.labelSmall) }
         TextButton(onClick = onRemoveTrack) { Text("✕", color = NovaColors.Error) }
+
+        keyMenuIndex?.let { keyIndex ->
+            DropdownMenu(
+                expanded = true,
+                onDismissRequest = { keyMenuIndex = null },
+            ) {
+                DropdownMenuItem(text = { Text("Move +0.5s") }, onClick = { onMoveKey(keyIndex, 0.5f); keyMenuIndex = null })
+                DropdownMenuItem(text = { Text("Move −0.5s") }, onClick = { onMoveKey(keyIndex, -0.5f); keyMenuIndex = null })
+                DropdownMenuItem(text = { Text("Copy") }, onClick = { onCopyKey(keyIndex); keyMenuIndex = null })
+                DropdownMenuItem(text = { Text("Paste") }, onClick = { onPasteKey(); keyMenuIndex = null })
+                DropdownMenuItem(
+                    text = { Text("Delete", color = NovaColors.Error) },
+                    onClick = { onDeleteKey(keyIndex); keyMenuIndex = null },
+                )
+            }
+        }
     }
 }
 
@@ -169,7 +217,6 @@ private fun addTrack(viewModel: EditorViewModel, entityId: String, property: Str
     viewModel.updateEntity(entityId, "Add animation track") { e ->
         val clip = e.animation ?: AnimationClipComponent()
         if (clip.tracks.any { it.property == property }) return@updateEntity e
-        // Seed with two keys: current value at t=0 and same at t=2.
         val current = propertyValue(e.transform, property)
         val track = AnimationTrackData(
             property = property,
@@ -179,14 +226,49 @@ private fun addTrack(viewModel: EditorViewModel, entityId: String, property: Str
     }
 }
 
-private fun addKeyAtHalf(viewModel: EditorViewModel, entityId: String, trackIndex: Int) {
+private fun addKeyAtPlayhead(viewModel: EditorViewModel, entityId: String, trackIndex: Int, timeSec: Float) {
     viewModel.updateEntity(entityId, "Add keyframe") { e ->
         val clip = e.animation ?: return@updateEntity e
         val tracks = clip.tracks.toMutableList()
         val track = tracks.getOrNull(trackIndex) ?: return@updateEntity e
-        val last = track.keys.maxByOrNull { it.t } ?: return@updateEntity e
-        val newKey = AnimationKey(last.t + 1f, propertyValue(e.transform, track.property))
+        val value = propertyValue(e.transform, track.property)
+        val newKey = AnimationKey(timeSec, value)
         tracks[trackIndex] = track.copy(keys = (track.keys + newKey).sortedBy { it.t })
+        e.copy(animation = clip.copy(tracks = tracks))
+    }
+}
+
+private fun deleteKey(viewModel: EditorViewModel, entityId: String, trackIndex: Int, keyIndex: Int) {
+    viewModel.updateEntity(entityId, "Delete keyframe") { e ->
+        val clip = e.animation ?: return@updateEntity e
+        val tracks = clip.tracks.toMutableList()
+        val track = tracks.getOrNull(trackIndex) ?: return@updateEntity e
+        val keys = track.keys.toMutableList()
+        if (keyIndex in keys.indices) keys.removeAt(keyIndex)
+        tracks[trackIndex] = track.copy(keys = keys)
+        e.copy(animation = clip.copy(tracks = tracks))
+    }
+}
+
+private fun moveKey(viewModel: EditorViewModel, entityId: String, trackIndex: Int, keyIndex: Int, delta: Float) {
+    viewModel.updateEntity(entityId, "Move keyframe") { e ->
+        val clip = e.animation ?: return@updateEntity e
+        val tracks = clip.tracks.toMutableList()
+        val track = tracks.getOrNull(trackIndex) ?: return@updateEntity e
+        val keys = track.keys.toMutableList()
+        val key = keys.getOrNull(keyIndex) ?: return@updateEntity e
+        keys[keyIndex] = key.copy(t = (key.t + delta).coerceAtLeast(0f))
+        tracks[trackIndex] = track.copy(keys = keys.sortedBy { it.t })
+        e.copy(animation = clip.copy(tracks = tracks))
+    }
+}
+
+private fun pasteKey(viewModel: EditorViewModel, entityId: String, trackIndex: Int, key: AnimationKey) {
+    viewModel.updateEntity(entityId, "Paste keyframe") { e ->
+        val clip = e.animation ?: return@updateEntity e
+        val tracks = clip.tracks.toMutableList()
+        val track = tracks.getOrNull(trackIndex) ?: return@updateEntity e
+        tracks[trackIndex] = track.copy(keys = (track.keys + key).sortedBy { it.t })
         e.copy(animation = clip.copy(tracks = tracks))
     }
 }
