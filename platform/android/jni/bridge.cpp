@@ -197,4 +197,17 @@ Java_dev_nova_editor_bridge_NativeEngine_nativeGetStats(JNIEnv* env, jobject /*t
     return env->NewStringUTF("{}");
 }
 
+JNIEXPORT jstring JNICALL
+Java_dev_nova_editor_bridge_NativeEngine_nativeConsumeUiTextEvents(JNIEnv* env, jobject /*thiz*/, jlong handle) {
+    if (auto* e = fromHandle(handle)) {
+        return env->NewStringUTF(e->consumeUiTextEventsJson().c_str());
+    }
+    return env->NewStringUTF("[]");
+}
+
+JNIEXPORT void JNICALL
+Java_dev_nova_editor_bridge_NativeEngine_nativeOnTap(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle, jfloat worldX, jfloat worldY) {
+    if (auto* e = fromHandle(handle)) e->onTap(worldX, worldY);
+}
+
 } // extern "C"

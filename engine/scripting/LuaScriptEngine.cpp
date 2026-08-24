@@ -96,6 +96,39 @@ int l_log(lua_State* L) {
     return 0;
 }
 
+int l_raycast(lua_State* L) {
+    LuaScriptEngine* self = LuaScriptEngine::self(L);
+    const float x1 = static_cast<float>(luaL_checknumber(L, 1));
+    const float y1 = static_cast<float>(luaL_checknumber(L, 2));
+    const float x2 = static_cast<float>(luaL_checknumber(L, 3));
+    const float y2 = static_cast<float>(luaL_checknumber(L, 4));
+    float hx = 0.0f, hy = 0.0f;
+    const std::string id = self->apiRaycast(x1, y1, x2, y2, &hx, &hy);
+    if (id.empty()) {
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_pushstring(L, id.c_str());
+    lua_pushnumber(L, hx);
+    lua_pushnumber(L, hy);
+    return 3;
+}
+
+int l_ui_pressed(lua_State* L) {
+    LuaScriptEngine* self = LuaScriptEngine::self(L);
+    const char* id = luaL_checkstring(L, 1);
+    lua_pushboolean(L, self->apiUiPressed(id));
+    return 1;
+}
+
+int l_set_ui_text(lua_State* L) {
+    LuaScriptEngine* self = LuaScriptEngine::self(L);
+    const char* id = luaL_checkstring(L, 1);
+    const char* text = luaL_checkstring(L, 2);
+    self->apiSetUiText(id, text);
+    return 0;
+}
+
 } // namespace
 
 LuaScriptEngine::~LuaScriptEngine() {
@@ -161,6 +194,12 @@ bool LuaScriptEngine::start(std::string* outError) {
     lua_setfield(state_, -2, "set_animation_frame");
     lua_pushcfunction(state_, l_log);
     lua_setfield(state_, -2, "log");
+    lua_pushcfunction(state_, l_raycast);
+    lua_setfield(state_, -2, "raycast");
+    lua_pushcfunction(state_, l_ui_pressed);
+    lua_setfield(state_, -2, "ui_pressed");
+    lua_pushcfunction(state_, l_set_ui_text);
+    lua_setfield(state_, -2, "set_ui_text");
     lua_setglobal(state_, "nova");
 
     // Execute each script in its own environment so `on_update` stays per-script.
@@ -306,6 +345,25 @@ void LuaScriptEngine::apiSetAnimationFrame(const std::string& id, int frame) {
     if (SpriteInstance* sprite = scene_->findSprite(id)) {
         sprite->frameIndex = frame;
     }
+}
+
+std::string LuaScriptEngine::apiRaycast(float x1, float y1, float x2, float y2,
+                                        float* outX, float* outY) {
+    if (!physics_) return "";
+    float t = -1.0f;
+    const std::string id = physics_->raycast(x1, y1, x2, y2, &t);
+    if (id.empty() || t < 0.0f) return "";
+    *outX = x1 + (x2 - x1) * t;
+    *outY = y1 + (y2 - y1) * t;
+    return id;
+}
+
+bool LuaScriptEngine::apiUiPressed(const std::string& id) {
+    return pressedUiIds_.erase(id) > 0;
+}
+
+void LuaScriptEngine::apiSetUiText(const std::string& id, const std::string& text) {
+    uiTextEvents_.push_back({id, text});
 }
 
 } // namespace nova

@@ -2,6 +2,8 @@
 
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
+#include <utility>
 #include <vector>
 
 struct lua_State;
@@ -59,6 +61,11 @@ public:
     std::vector<std::string>& soundEvents() { return soundEvents_; }
     /** Log lines from nova.log and script errors (drained by Engine). */
     std::vector<std::string>& logMessages() { return logMessages_; }
+    /** UI text updates queued via nova.set_ui_text (id -> text). */
+    std::vector<std::pair<std::string, std::string>>& uiTextEvents() { return uiTextEvents_; }
+
+    /** Registers a UI tap (Engine::onTap); scripts poll via nova.ui_pressed. */
+    void queueUiPress(const std::string& id) { pressedUiIds_.insert(id); }
 
     float inputX() const { return inputX_; }
     float inputY() const { return inputY_; }
@@ -71,6 +78,10 @@ public:
     void apiGetVelocity(const std::string& id, float* outVx, float* outVy);
     bool apiIsGrounded(const std::string& id);
     void apiSetAnimationFrame(const std::string& id, int frame);
+    /** Returns hit entity id (or "") + surface point via out params. */
+    std::string apiRaycast(float x1, float y1, float x2, float y2, float* outX, float* outY);
+    bool apiUiPressed(const std::string& id);   // consumes the press
+    void apiSetUiText(const std::string& id, const std::string& text);
 
     /** Registry lookup (public for the file-local trampoline functions). */
     static LuaScriptEngine* self(lua_State* L);
@@ -89,6 +100,8 @@ private:
     std::vector<std::string> scriptOrder_;
     std::vector<std::string> soundEvents_;
     std::vector<std::string> logMessages_;
+    std::vector<std::pair<std::string, std::string>> uiTextEvents_;
+    std::unordered_set<std::string> pressedUiIds_;
     float inputX_ = 0.0f;
     float inputY_ = 0.0f;
     bool inputJump_ = false;

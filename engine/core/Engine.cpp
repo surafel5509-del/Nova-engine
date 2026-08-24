@@ -179,6 +179,24 @@ void Engine::stepSimulation(float dt) {
 
     // Emit + integrate particles.
     particles_.update(dt);
+
+    // Camera follows its target (if configured).
+    updateCameraFollow(dt);
+
+    // Script-triggered UI text changes ride the event queue to Kotlin.
+    for (const auto& evt : scripting_.uiTextEvents()) {
+        uiTextEvents_.push_back(evt);
+    }
+    scripting_.uiTextEvents().clear();
+}
+
+void Engine::updateCameraFollow(float dt) {
+    if (scene_.gameCamera.followId.empty()) return;
+    const SpriteInstance* target = scene_.findSprite(scene_.gameCamera.followId);
+    if (!target) return;
+    const float t = 1.0f - std::exp(-scene_.gameCamera.followLerp * dt);
+    scene_.gameCamera.x += (target->x - scene_.gameCamera.x) * t;
+    scene_.gameCamera.y += (target->y - scene_.gameCamera.y) * t;
 }
 
 std::string Engine::snapshotPositionsJson() const {
@@ -234,6 +252,33 @@ std::string Engine::consumeLogsJson() {
         LOGI("%s", line.c_str());
     }
     return stringArrayJson(scripting_.logMessages());
+}
+
+std::string Engine::consumeUiTextEventsJson() {
+    std::string out = "[";
+    bool first = true;
+    for (const auto& evt : uiTextEvents_) {
+        if (!first) out += ",";
+        first = false;
+        out += "{\"id\":\"" + jsonEscape(evt.first) +
+               "\",\"text\":\"" + jsonEscape(evt.second) + "\"}";
+    }
+    out += "]";
+    uiTextEvents_.clear();
+    return out;
+}
+
+void Engine::onTap(float worldX, float worldY) {
+    // UI hit-test: topmost (last) element whose rect contains the tap.
+    for (auto it = scene_.uiElements.rbegin(); it != scene_.uiElements.rend(); ++it) {
+        const UiElementRecord& u = *it;
+        const float cx = scene_.gameCamera.present ? scene_.gameCamera.x + u.offsetX : u.offsetX;
+        const float cy = scene_.gameCamera.present ? scene_.gameCamera.y + u.offsetY : u.offsetY;
+        if (std::fabs(worldX - cx) <= u.width / 2.0f && std::fabs(worldY - cy) <= u.height / 2.0f) {
+            scripting_.queueUiPress(u.id);
+            return;
+        }
+    }
 }
 
 std::string Engine::statsJson() const {

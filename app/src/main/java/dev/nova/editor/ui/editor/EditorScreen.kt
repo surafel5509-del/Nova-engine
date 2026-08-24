@@ -2,6 +2,7 @@ package dev.nova.editor.ui.editor
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -55,7 +56,7 @@ import dev.nova.editor.ui.theme.NovaColors
 
 private enum class BottomTab(val label: String) {
     HIERARCHY("Hierarchy"), INSPECTOR("Inspector"), ASSETS("Assets"),
-    SCRIPTS("Scripts"), CONSOLE("Console")
+    SCRIPTS("Scripts"), AI("AI"), CONSOLE("Console")
 }
 
 /**
@@ -145,11 +146,55 @@ fun EditorScreen(
                         BottomTab.INSPECTOR -> InspectorPanel(viewModel, importTexture)
                         BottomTab.ASSETS -> AssetBrowserPanel(viewModel)
                         BottomTab.SCRIPTS -> ScriptEditorPanel(viewModel)
+                        BottomTab.AI -> AiAssistantPanel(viewModel)
                         BottomTab.CONSOLE -> ConsolePanel(viewModel)
                     }
                 }
             }
+
+            // Status bar: scene, entity count, tool, play state, dirty marker.
+            StatusBar(viewModel)
         }
+    }
+}
+
+@Composable
+private fun StatusBar(viewModel: EditorViewModel) {
+    val playLabel = when (viewModel.playState) {
+        PlayState.PLAYING -> "▶ Playing"
+        PlayState.PAUSED -> "❚❚ Paused"
+        PlayState.STOPPED -> "■ Stopped"
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(NovaColors.Surface)
+            .padding(horizontal = 10.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "${viewModel.scene.name}  ·  ${viewModel.scene.entities.size} entities",
+            style = MaterialTheme.typography.labelSmall,
+            color = NovaColors.TextDim,
+        )
+        Spacer(Modifier.weight(1f))
+        Text(
+            "${viewModel.activeTool.label} tool",
+            style = MaterialTheme.typography.labelSmall,
+            color = NovaColors.TextDim,
+        )
+        Spacer(Modifier.padding(4.dp))
+        Text(
+            playLabel,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (viewModel.playState == PlayState.PLAYING) NovaColors.Accent else NovaColors.TextDim,
+        )
+        Spacer(Modifier.padding(4.dp))
+        Text(
+            if (viewModel.dirty) "● Unsaved" else "✓ Saved",
+            style = MaterialTheme.typography.labelSmall,
+            color = if (viewModel.dirty) NovaColors.Warning else NovaColors.Accent,
+        )
     }
 }
 
@@ -218,6 +263,12 @@ private fun EditorToolbar(
             selected = viewModel.snapEnabled,
             onClick = { viewModel.enableSnapping(!viewModel.snapEnabled) },
             label = { Text("Snap", style = MaterialTheme.typography.labelSmall) },
+            modifier = Modifier.padding(horizontal = 2.dp),
+        )
+        FilterChip(
+            selected = viewModel.autoTile,
+            onClick = { viewModel.toggleAutoTile() },
+            label = { Text("AutoTile", style = MaterialTheme.typography.labelSmall) },
             modifier = Modifier.padding(horizontal = 2.dp),
         )
 

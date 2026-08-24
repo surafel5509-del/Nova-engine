@@ -21,6 +21,8 @@ struct SpriteInstance {
     float a = 1.0f;
     std::string texture;     // empty = untextured (white) quad
     bool selected = false;
+    bool flipX = false;
+    bool flipY = false;
     int sortingOrder = 0;
     float parallaxFactor = 1.0f;  // 1 = moves with world, 0 = fixed to camera
     // Sprite-sheet animation (1x1 = single frame).
@@ -54,6 +56,23 @@ struct GameCamera {
     float bgR = 0.09f;
     float bgG = 0.10f;
     float bgB = 0.13f;
+    std::string followId;        // optional: camera centers on this entity each frame
+    float followLerp = 4.0f;     // smoothing (higher = snappier)
+};
+
+/** Screen-space UI element (anchored to the camera center). */
+struct UiElementRecord {
+    std::string id;
+    std::string kind;            // label | button | panel
+    float offsetX = 0.0f;        // world-unit offset from camera center
+    float offsetY = 0.0f;
+    float width = 2.0f;
+    float height = 0.6f;
+    float r = 0.2f;
+    float g = 0.22f;
+    float b = 0.28f;
+    float a = 0.9f;
+    std::string textKey;         // texture key of the pre-rendered text (may be empty)
 };
 
 /** Particle emitter parameters parsed from the render scene. */
@@ -118,6 +137,7 @@ struct RenderScene {
     std::vector<TilemapRecord> tilemaps;
     std::vector<AudioSourceRecord> audioSources;
     std::vector<ScriptRecord> scripts;
+    std::vector<UiElementRecord> uiElements;
     GameCamera gameCamera;
 
     /** Parses JSON; returns false (and leaves *this unchanged) on error. */

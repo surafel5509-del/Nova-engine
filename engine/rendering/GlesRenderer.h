@@ -60,6 +60,7 @@ private:
     void drawSprites(const RenderScene& scene);
     void drawTilemaps(const RenderScene& scene);
     void drawParticles(const ParticleSystem& particles);
+    void drawUi(const RenderScene& scene);
     void drawLineBox(float cx, float cy, float halfW, float halfH, float rotationDeg,
                      float r, float g, float b, float a, const Mat4& viewProj);
     void drawGameCameraFrame(const RenderScene& scene, const Mat4& viewProj);

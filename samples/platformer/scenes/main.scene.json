@@ -6,44 +6,61 @@
             "id": "camera-1",
             "name": "Main Camera",
             "enabled": true,
-            "parentId": null,
-            "transform": {"x": 0, "y": 0, "rotation": 0, "scaleX": 1, "scaleY": 1},
-            "camera": {"zoom": 100, "frustumWidth": 12, "frustumHeight": 7, "backgroundR": 0.09, "backgroundG": 0.1, "backgroundB": 0.13}
+            "transform": {"x": 0, "y": 0},
+            "camera": {"zoom": 80, "frustumWidth": 14, "frustumHeight": 8, "followTargetName": "Player", "followLerp": 5}
         },
         {
             "id": "ground-1",
             "name": "Ground",
             "enabled": true,
-            "parentId": null,
-            "transform": {"x": 0, "y": -2.5, "rotation": 0, "scaleX": 1, "scaleY": 1},
-            "sprite": {"width": 12, "height": 1, "r": 0.35, "g": 0.45, "b": 0.38, "a": 1},
-            "physicsBody": {"bodyType": "static", "colliderWidth": 12, "colliderHeight": 1}
+            "transform": {"x": 0, "y": -2.5},
+            "sprite": {"width": 30, "height": 1, "r": 0.35, "g": 0.45, "b": 0.38},
+            "physicsBody": {"bodyType": "static", "colliderWidth": 30, "colliderHeight": 1}
+        },
+        {
+            "id": "platform-1",
+            "name": "Platform",
+            "enabled": true,
+            "transform": {"x": 3, "y": -0.5},
+            "sprite": {"width": 2.5, "height": 0.4, "r": 0.5, "g": 0.4, "b": 0.3},
+            "physicsBody": {"bodyType": "static", "colliderWidth": 2.5, "colliderHeight": 0.4}
         },
         {
             "id": "player-1",
             "name": "Player",
             "enabled": true,
-            "parentId": null,
-            "transform": {"x": 0, "y": 0, "rotation": 0, "scaleX": 1, "scaleY": 1},
-            "sprite": {"width": 1, "height": 1, "r": 0.3, "g": 0.7, "b": 0.95, "a": 1},
+            "transform": {"x": 0, "y": 0},
+            "sprite": {"width": 1, "height": 1, "r": 0.3, "g": 0.7, "b": 0.95},
             "physicsBody": {"bodyType": "dynamic", "colliderWidth": 1, "colliderHeight": 1},
             "script": {"scriptPath": "scripts/player.lua"}
+        },
+        {
+            "id": "coin-1",
+            "name": "Coin",
+            "enabled": true,
+            "transform": {"x": 3, "y": 0.4},
+            "sprite": {"width": 0.5, "height": 0.5, "r": 1, "g": 0.85, "b": 0.2}
         },
         {
             "id": "dust-1",
             "name": "Dust",
             "enabled": true,
-            "parentId": null,
-            "transform": {"x": 0, "y": -1.8, "rotation": 0, "scaleX": 1, "scaleY": 1},
-            "particles": {"emissionRate": 40, "lifetime": 0.8, "speed": 1.5, "spreadDegrees": 60, "gravity": -1, "startSize": 0.15, "endSize": 0.02}
+            "transform": {"x": 0, "y": -1.8},
+            "particles": {"emissionRate": 30, "lifetime": 0.7, "speed": 1.2, "spreadDegrees": 50, "gravity": -0.5, "startSize": 0.12, "endSize": 0.02}
         },
         {
-            "id": "rocks-1",
-            "name": "Tilemap",
+            "id": "ui-score",
+            "name": "Score Label",
             "enabled": true,
-            "parentId": null,
-            "transform": {"x": -4, "y": -2.2, "rotation": 0, "scaleX": 1, "scaleY": 1},
-            "tilemap": {"tileSize": 0.5, "cols": 8, "rows": 2, "tilesetCols": 1, "tilesetRows": 1, "tiles": [0,0,0,0,0,0,0,0,0,-1,0,0,-1,0,0,0]}
+            "transform": {"x": 0, "y": 0},
+            "ui": {"kind": "label", "text": "Score: 0", "fontSizeSp": 18, "offsetX": -3.5, "offsetY": 3, "width": 3, "height": 0.7}
+        },
+        {
+            "id": "ui-jump",
+            "name": "Jump Button",
+            "enabled": true,
+            "transform": {"x": 0, "y": 0},
+            "ui": {"kind": "button", "text": "JUMP", "fontSizeSp": 20, "offsetX": 3.5, "offsetY": -2.6, "width": 2.2, "height": 1, "r": 0.2, "g": 0.5, "b": 0.3}
         }
     ]
 }

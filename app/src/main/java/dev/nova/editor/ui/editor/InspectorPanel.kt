@@ -317,6 +317,47 @@ fun InspectorPanel(
             HorizontalDivider(color = NovaColors.PanelBorder)
         }
 
+        // --- UI element ---
+        selected.ui?.let { ui ->
+            ComponentHeader(
+                title = "UI Element",
+                onReset = { viewModel.updateEntity(selected.id, "Reset UI") { it.copy(ui = dev.nova.editor.scene.UiComponent()) } },
+                onRemove = { viewModel.updateEntity(selected.id, "Remove UI component") { it.copy(ui = null) } },
+            )
+            UiKindDropdown(ui.kind) { v ->
+                viewModel.updateEntity(selected.id, "Edit UI kind") { e -> e.copy(ui = e.ui?.copy(kind = v)) }
+            }
+            var text by remember(ui.text) { mutableStateOf(ui.text) }
+            OutlinedTextField(
+                value = text,
+                onValueChange = { new ->
+                    text = new
+                    viewModel.updateEntity(selected.id, "Edit UI text") { e -> e.copy(ui = e.ui?.copy(text = new)) }
+                },
+                label = { Text("Text", style = MaterialTheme.typography.labelSmall) },
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+            )
+            FloatField("Font size (sp)", ui.fontSizeSp) { v -> viewModel.updateEntity(selected.id, "Edit font size") { e -> e.copy(ui = e.ui?.copy(fontSizeSp = v.coerceIn(8f, 64f))) } }
+            FloatField("Offset X", ui.offsetX) { v -> viewModel.updateEntity(selected.id, "Edit UI offset") { e -> e.copy(ui = e.ui?.copy(offsetX = v)) } }
+            FloatField("Offset Y", ui.offsetY) { v -> viewModel.updateEntity(selected.id, "Edit UI offset") { e -> e.copy(ui = e.ui?.copy(offsetY = v)) } }
+            FloatField("Width", ui.width) { v -> viewModel.updateEntity(selected.id, "Edit UI width") { e -> e.copy(ui = e.ui?.copy(width = v.coerceAtLeast(0.2f))) } }
+            FloatField("Height", ui.height) { v -> viewModel.updateEntity(selected.id, "Edit UI height") { e -> e.copy(ui = e.ui?.copy(height = v.coerceAtLeast(0.2f))) } }
+            Text("Background", style = MaterialTheme.typography.bodySmall, color = NovaColors.TextDim)
+            ColorSlider("R", ui.r) { v -> viewModel.updateEntity(selected.id, "Edit UI bg") { e -> e.copy(ui = e.ui?.copy(r = v)) } }
+            ColorSlider("G", ui.g) { v -> viewModel.updateEntity(selected.id, "Edit UI bg") { e -> e.copy(ui = e.ui?.copy(g = v)) } }
+            ColorSlider("B", ui.b) { v -> viewModel.updateEntity(selected.id, "Edit UI bg") { e -> e.copy(ui = e.ui?.copy(b = v)) } }
+            Text(
+                if (ui.kind == "button") "Taps reach scripts via nova.ui_pressed(id)."
+                else "Anchored to the camera center (screen-space).",
+                style = MaterialTheme.typography.bodySmall,
+                color = NovaColors.TextDim,
+            )
+            Spacer(Modifier.height(8.dp))
+            HorizontalDivider(color = NovaColors.PanelBorder)
+        }
+
         // --- Add component ---
         Spacer(Modifier.height(8.dp))
         Text("Add Component", style = MaterialTheme.typography.titleSmall, color = NovaColors.Text)
@@ -360,6 +401,11 @@ fun InspectorPanel(
                 OutlinedButton(onClick = {
                     viewModel.updateEntity(selected.id, "Add Script component") { it.copy(script = dev.nova.editor.scene.ScriptComponent()) }
                 }) { Text("Script") }
+            }
+            if (selected.ui == null) {
+                OutlinedButton(onClick = {
+                    viewModel.updateEntity(selected.id, "Add UI component") { it.copy(ui = dev.nova.editor.scene.UiComponent()) }
+                }) { Text("UI") }
             }
         }
     }
@@ -429,6 +475,22 @@ private fun BodyTypeDropdown(current: String, onSelected: (String) -> Unit) {
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             types.forEach { type ->
                 DropdownMenuItem(text = { Text(type) }, onClick = { onSelected(type); expanded = false })
+            }
+        }
+    }
+}
+
+@Composable
+private fun UiKindDropdown(current: String, onSelected: (String) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val kinds = listOf("label", "button", "panel")
+    Box {
+        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+            Text("UI kind: $current")
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            kinds.forEach { kind ->
+                DropdownMenuItem(text = { Text(kind) }, onClick = { onSelected(kind); expanded = false })
             }
         }
     }

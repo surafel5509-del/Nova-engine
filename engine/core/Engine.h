@@ -52,6 +52,8 @@ public:
     std::string consumeSoundEventsJson();
     /** Drains script log/error lines (JSON array) and forwards to logcat. */
     std::string consumeLogsJson();
+    /** Drains UI text updates queued by scripts (JSON array of {id, text}). */
+    std::string consumeUiTextEventsJson();
     /** Profiler snapshot: fps, frame ms, draw calls, entities, particles, bodies. */
     std::string statsJson() const;
 
@@ -63,12 +65,15 @@ public:
     // ---- Input (runtime) ----
     void setInputAxis(float x, float y);   // -1..1 movement axis
     void setInputJump(bool pressed);
+    /** Registers a tap at world coordinates (UI hit-testing during play). */
+    void onTap(float worldX, float worldY);
 
     const RenderScene& scene() const { return scene_; }
 
 private:
     void applyGameCameraIfEnabled();
     void syncAnimatedSprites();
+    void updateCameraFollow(float dt);
 
     GlesRenderer renderer_;
     RenderScene scene_;
@@ -78,6 +83,7 @@ private:
     bool glReady_ = false;
     bool simulating_ = false;
     bool useGameCamera_ = false;
+    std::vector<std::pair<std::string, std::string>> uiTextEvents_;
 
     // Animation state: accumulated time per sprite id.
     std::unordered_map<std::string, float> animTime_;

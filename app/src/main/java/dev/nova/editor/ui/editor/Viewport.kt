@@ -70,6 +70,27 @@ fun Viewport(
         }
     }
 
+    // UI text textures: re-render whenever the scene changes (undoable edits
+    // bump renderRevision, which also re-pushes textures for ui:// keys).
+    LaunchedEffect(viewModel.renderRevision) {
+        for (entity in viewModel.scene.entities) {
+            val ui = entity.ui ?: continue
+            if (!entity.enabled || ui.text.isBlank()) continue
+            val color = android.graphics.Color.argb(
+                (ui.a * 255).toInt().coerceIn(0, 255),
+                (ui.textR * 255).toInt().coerceIn(0, 255),
+                (ui.textG * 255).toInt().coerceIn(0, 255),
+                (ui.textB * 255).toInt().coerceIn(0, 255),
+            )
+            dev.nova.editor.ui.UiTextTexture.render(ui.text, ui.fontSizeSp * 4f, color)?.let { tex ->
+                renderer.submitTexture(
+                    "ui://text/${entity.id}",
+                    EngineGlRenderer.TextureData(tex.rgba, tex.width, tex.height),
+                )
+            }
+        }
+    }
+
     // Game view + physics debug flags.
     LaunchedEffect(viewModel.gameView) {
         renderer.submitUseGameCamera(viewModel.gameView)
@@ -117,6 +138,17 @@ fun Viewport(
                         for (path in parseStringArray(soundsJson)) {
                             audio.play(path)
                         }
+                        // Script-driven UI text updates: re-render the texture.
+                        val uiTextJson = renderer.callBlocking { h -> NativeEngine.nativeConsumeUiTextEvents(h) }
+                        for ((id, text) in parseUiTextEvents(uiTextJson)) {
+                            val color = android.graphics.Color.WHITE
+                            dev.nova.editor.ui.UiTextTexture.render(text, 64f, color)?.let { tex ->
+                                renderer.submitTexture(
+                                    "ui://text/$id",
+                                    EngineGlRenderer.TextureData(tex.rgba, tex.width, tex.height),
+                                )
+                            }
+                        }
                         statsAccum += dt
                         if (statsAccum >= 0.5f) {
                             statsAccum = 0f
@@ -140,7 +172,7 @@ fun Viewport(
             .fillMaxSize()
             .onSizeChanged { viewportSizePx = Offset(it.width.toFloat(), it.height.toFloat()) }
             .pointerInput(viewModel.activeTool) {
-                handleViewportGestures(viewModel) { viewportSizePx }
+                handleViewportGestures(viewModel, renderer) { viewportSizePx }
             },
         factory = { context ->
             GLSurfaceView(context).apply {
@@ -156,6 +188,7 @@ fun Viewport(
 
 private suspend fun PointerInputScope.handleViewportGestures(
     viewModel: EditorViewModel,
+    rendererRef: EngineGlRenderer?,
     viewportSizePx: () -> Offset,
 ) {
     fun screenToWorld(pos: Offset): Offset {
@@ -182,7 +215,10 @@ private suspend fun PointerInputScope.handleViewportGestures(
                 if (pressed.isEmpty()) {
                     if (!moved && !sawSecondPointer) {
                         val world = screenToWorld(startPos)
-                        if (viewModel.activeTool == EditorTool.TILE) {
+                        if (viewModel.playState == PlayState.PLAYING) {
+                            // During play, taps hit-test UI elements for scripts.
+                            rendererRef?.queue { h -> NativeEngine.nativeOnTap(h, world.x, world.y) }
+                        } else if (viewModel.activeTool == EditorTool.TILE) {
                             viewModel.activeTilemapId()?.let { mapId ->
                                 viewModel.paintTileAt(mapId, world.x, world.y, viewModel.tileBrush)
                             }
@@ -318,6 +354,17 @@ private fun parseStringArray(json: String?): List<String> {
     return runCatching {
         val array = JSONArray(json)
         (0 until array.length()).map { array.getString(it) }
+    }.getOrDefault(emptyList())
+}
+
+private fun parseUiTextEvents(json: String?): List<Pair<String, String>> {
+    if (json.isNullOrBlank()) return emptyList()
+    return runCatching {
+        val array = JSONArray(json)
+        (0 until array.length()).map {
+            val obj = array.getJSONObject(it)
+            obj.getString("id") to obj.getString("text")
+        }
     }.getOrDefault(emptyList())
 }
 

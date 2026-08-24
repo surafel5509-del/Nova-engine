@@ -109,6 +109,30 @@ void testHorizontalSeparation() {
     check(gap >= 0.99f, "overlapping boxes separate");
 }
 
+void testRaycastHitsNearest() {
+    nova::PhysicsWorld world;
+    nova::PhysicsBody far = makeDynamic("far", 8.0f, 0.0f, 0.5f, 0.5f);
+    nova::PhysicsBody near = makeDynamic("near", 3.0f, 0.0f, 0.5f, 0.5f);
+    world.addBody(far);
+    world.addBody(near);
+    float t = -1.0f;
+    const std::string hit = world.raycast(0.0f, 0.0f, 10.0f, 0.0f, &t);
+    check(hit == "near", "raycast hits nearest body");
+    check(nearly(t, 0.25f), "raycast t at near box face");
+}
+
+void testRaycastMisses() {
+    nova::PhysicsWorld world;
+    world.addBody(makeDynamic("a", 0.0f, 5.0f, 0.5f, 0.5f));
+    check(world.raycast(0.0f, 0.0f, 10.0f, 0.0f).empty(), "raycast misses off-axis body");
+}
+
+void testRaycastFromInsideHits() {
+    nova::PhysicsWorld world;
+    world.addBody(makeDynamic("box", 0.0f, 0.0f, 1.0f, 1.0f));
+    check(world.raycast(0.0f, 0.0f, 10.0f, 0.0f) == "box", "ray from inside hits");
+}
+
 } // namespace
 
 int runPhysicsTests() {
@@ -117,6 +141,9 @@ int runPhysicsTests() {
     testRestitutionBounce();
     testStaticBodiesDoNotMove();
     testHorizontalSeparation();
+    testRaycastHitsNearest();
+    testRaycastMisses();
+    testRaycastFromInsideHits();
     std::printf("physics: %d checks, %d failures\n", checks, failures);
     return failures;
 }

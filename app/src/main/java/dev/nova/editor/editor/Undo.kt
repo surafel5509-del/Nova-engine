@@ -188,3 +188,13 @@ class DuplicateEntityCommand(private val entityId: String) : EditorCommand {
 
     fun duplicatedId(): String? = copyRootId
 }
+
+/** Whole-scene replacement (used by AI agent edits; single undo entry). */
+class ReplaceSceneCommand(
+    override val description: String,
+    private val before: Scene,
+    private val after: Scene,
+) : EditorCommand {
+    override fun execute(scene: Scene): Scene = after
+    override fun undo(scene: Scene): Scene = before
+}

@@ -110,6 +110,8 @@ void SpriteBatch::drawSprite(const SpriteInstance& sprite, GLuint texture, GLuin
         v1 = 1.0f - static_cast<float>(row) / rows;
         v0 = 1.0f - static_cast<float>(row + 1) / rows;
     }
+    if (sprite.flipX) std::swap(u0, u1);
+    if (sprite.flipY) std::swap(v0, v1);
 
     for (int i = 0; i < 6; ++i) {
         const int c = tris[i];

@@ -160,6 +160,7 @@ void GlesRenderer::drawFrame(const RenderScene& scene, const ParticleSystem* par
     drawTilemaps(scene);
     drawSprites(scene);
     if (particles) drawParticles(*particles);
+    drawUi(scene);
     spriteBatch_.endFrame();
     for (const SpriteInstance& sprite : scene.sprites) {
         if (sprite.selected) {
@@ -252,6 +253,35 @@ void GlesRenderer::drawParticles(const ParticleSystem& particles) {
             s.b = p.b;
             s.a = 1.0f - t;   // fade out over lifetime
             spriteBatch_.drawSprite(s, texture, whiteTexture_.id());
+        }
+    }
+}
+
+void GlesRenderer::drawUi(const RenderScene& scene) {
+    for (const UiElementRecord& u : scene.uiElements) {
+        // Background panel/button.
+        SpriteInstance bg;
+        bg.x = camera_.centerX + u.offsetX;
+        bg.y = camera_.centerY + u.offsetY;
+        bg.width = u.width;
+        bg.height = u.height;
+        bg.r = u.r;
+        bg.g = u.g;
+        bg.b = u.b;
+        bg.a = u.a;
+        spriteBatch_.drawSprite(bg, 0, whiteTexture_.id());
+
+        // Text overlay (pre-rendered by the Kotlin side into a texture).
+        if (!u.textKey.empty()) {
+            auto it = textures_.find(u.textKey);
+            if (it != textures_.end()) {
+                SpriteInstance text;
+                text.x = bg.x;
+                text.y = bg.y;
+                text.width = u.width * 0.92f;
+                text.height = u.height * 0.82f;
+                spriteBatch_.drawSprite(text, it->second.id(), whiteTexture_.id());
+            }
         }
     }
 }

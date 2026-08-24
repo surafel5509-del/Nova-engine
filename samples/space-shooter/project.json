@@ -1,0 +1,9 @@
+{
+    "name": "Sample Space Shooter",
+    "packageName": "dev.nova.samples.shooter",
+    "projectVersion": "1.0",
+    "orientation": "PORTRAIT",
+    "dimension": "TWO_D",
+    "template": "EMPTY",
+    "lastOpenedEpochMs": 0
+}

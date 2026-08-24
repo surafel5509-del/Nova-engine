@@ -64,6 +64,8 @@ bool RenderScene::parseFrom(const std::string& jsonText, std::string* outError) 
         s.a = getFloat(js, "a", 1.0f);
         s.texture = getString(js, "texture", "");
         s.selected = getBool(js, "selected", false);
+        s.flipX = getBool(js, "flipX", false);
+        s.flipY = getBool(js, "flipY", false);
         s.sortingOrder = getInt(js, "sortingOrder", 0);
         s.parallaxFactor = getFloat(js, "parallaxFactor", 1.0f);
         s.frameCols = getInt(js, "frameCols", 1);
@@ -101,6 +103,27 @@ bool RenderScene::parseFrom(const std::string& jsonText, std::string* outError) 
         next.gameCamera.bgR = getFloat(jc, "bgR", 0.09f);
         next.gameCamera.bgG = getFloat(jc, "bgG", 0.10f);
         next.gameCamera.bgB = getFloat(jc, "bgB", 0.13f);
+        next.gameCamera.followId = getString(jc, "followId", "");
+        next.gameCamera.followLerp = getFloat(jc, "followLerp", 4.0f);
+    }
+
+    if (root.contains("uiElements") && root["uiElements"].is_array()) {
+        for (const auto& ju : root["uiElements"]) {
+            if (!ju.is_object()) continue;
+            UiElementRecord u;
+            u.id = getString(ju, "id", "");
+            u.kind = getString(ju, "kind", "panel");
+            u.offsetX = getFloat(ju, "offsetX", 0.0f);
+            u.offsetY = getFloat(ju, "offsetY", 0.0f);
+            u.width = getFloat(ju, "width", 2.0f);
+            u.height = getFloat(ju, "height", 0.6f);
+            u.r = getFloat(ju, "r", 0.2f);
+            u.g = getFloat(ju, "g", 0.22f);
+            u.b = getFloat(ju, "b", 0.28f);
+            u.a = getFloat(ju, "a", 0.9f);
+            u.textKey = getString(ju, "textKey", "");
+            next.uiElements.push_back(std::move(u));
+        }
     }
 
     if (root.contains("emitters") && root["emitters"].is_array()) {

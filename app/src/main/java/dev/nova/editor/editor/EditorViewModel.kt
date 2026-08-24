@@ -5,6 +5,11 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import dev.nova.editor.ai.AI_SYSTEM_PROMPT
+import dev.nova.editor.ai.AiActionApplier
+import dev.nova.editor.ai.AiClient
+import dev.nova.editor.ai.AiSettings
 import dev.nova.editor.project.ProjectConfig
 import dev.nova.editor.project.ProjectRepository
 import dev.nova.editor.scene.Entity
@@ -13,6 +18,9 @@ import dev.nova.editor.scene.Scene
 import dev.nova.editor.scene.SceneJson
 import dev.nova.editor.scene.SceneOps
 import dev.nova.editor.scene.buildRenderScene
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 
 enum class EditorTool(val label: String) { SELECT("Select"), MOVE("Move"), TILE("Tile"), PAN("Pan"), ZOOM("Zoom") }
@@ -85,6 +93,9 @@ class EditorViewModel(
     // ---- Tile editing ----
     /** Currently selected tile index painted by the TILE tool. */
     var tileBrush by mutableIntStateOf(0)
+
+    /** When on, TILE paint recomputes blob bitmask tiles around each stroke. */
+    var autoTile by mutableStateOf(false)
 
     // ---- Profiler ----
     var stats by mutableStateOf(EngineStats())
@@ -357,11 +368,23 @@ class EditorViewModel(
         val col = kotlin.math.floor((worldX - wt.x) / map.tileSize).toInt()
         val row = kotlin.math.floor((worldY - wt.y) / map.tileSize).toInt()
         if (col !in 0 until map.cols || row !in 0 until map.rows) return false
-        if (map.tileAt(col, row) == value) return true   // nothing to do
+        if (!autoTile && map.tileAt(col, row) == value) return true   // nothing to do
         updateEntity(entityId, if (value >= 0) "Paint tile" else "Erase tile") { e ->
-            e.copy(tilemap = e.tilemap?.withTile(col, row, value))
+            val m = e.tilemap ?: return@updateEntity e
+            e.copy(
+                tilemap = if (autoTile) {
+                    // Blob tileset: tile index = neighbor bitmask (tiles 0..15).
+                    dev.nova.editor.scene.AutoTiler.paintAutoTiled(m, col, row, value >= 0, 0)
+                } else {
+                    m.withTile(col, row, value)
+                },
+            )
         }
         return true
+    }
+
+    fun toggleAutoTile() {
+        autoTile = !autoTile
     }
 
     /** First tilemap entity in the scene (the TILE tool's target), if any. */
@@ -379,6 +402,53 @@ class EditorViewModel(
             if (file.isFile) result[path] = file.readText()
         }
         return result
+    }
+
+    // ---- AI game builder ----
+
+    var aiBusy by mutableStateOf(false)
+        private set
+    var aiLastReply by mutableStateOf<String?>(null)
+        private set
+
+    /**
+     * Sends the prompt + scene summary to the configured provider, then
+     * applies the returned actions as a single undoable edit. Network runs
+     * off the main thread.
+     */
+    fun sendAiPrompt(settings: AiSettings, prompt: String) {
+        if (aiBusy) return
+        if (prompt.isBlank()) {
+            log(LogLevel.WARNING, "AI: prompt is empty")
+            return
+        }
+        aiBusy = true
+        log(LogLevel.INFO, "AI (${settings.provider.label}): thinking…")
+        viewModelScope.launch {
+            try {
+                val context = AiActionApplier.sceneSummary(scene)
+                val reply = withContext(Dispatchers.IO) {
+                    AiClient.chat(settings, AI_SYSTEM_PROMPT, "$prompt\n\n$context")
+                }
+                aiLastReply = reply
+                val before = scene
+                val result = withContext(Dispatchers.Default) {
+                    AiActionApplier.apply(before, reply, projectPath)
+                }
+                if (result.scene !== before && result.actions > 0) {
+                    scene = undoStack.push(scene, ReplaceSceneCommand("AI agent edit", before, result.scene))
+                    markChanged("AI: ${result.summary}")
+                    log(LogLevel.INFO, "AI applied ${result.actions} action(s): ${result.summary}")
+                } else {
+                    log(LogLevel.WARNING, "AI: ${result.summary}")
+                }
+            } catch (e: Exception) {
+                log(LogLevel.ERROR, "AI error: ${e.message}")
+                aiLastReply = "Error: ${e.message}"
+            } finally {
+                aiBusy = false
+            }
+        }
     }
 
     // ---- Asset browser ----

@@ -41,6 +41,12 @@ public:
     /** Advances the simulation by [dt] seconds (sub-stepped). */
     void step(float dt);
 
+    /**
+     * Casts a ray from (x1,y1) toward (x2,y2) against all body AABBs.
+     * Returns the closest hit body id, or empty string on no hit.
+     */
+    std::string raycast(float x1, float y1, float x2, float y2, float* outT = nullptr) const;
+
     const std::vector<PhysicsBody>& bodies() const { return bodies_; }
     std::vector<PhysicsBody>& bodies() { return bodies_; }
 

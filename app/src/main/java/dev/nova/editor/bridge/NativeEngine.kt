@@ -42,7 +42,9 @@ object NativeEngine {
     // ---- Events / profiling (drain per frame on the GL thread) ----
     external fun nativeConsumeSoundEvents(handle: Long): String
     external fun nativeConsumeLogs(handle: Long): String
+    external fun nativeConsumeUiTextEvents(handle: Long): String
     external fun nativeGetStats(handle: Long): String
+    external fun nativeOnTap(handle: Long, worldX: Float, worldY: Float)
 
     // ---- Game view / runtime ----
     external fun nativeSetUseGameCamera(handle: Long, use: Boolean)

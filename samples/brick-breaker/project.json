@@ -1,0 +1,9 @@
+{
+    "name": "Sample Brick Breaker",
+    "packageName": "dev.nova.samples.bricks",
+    "projectVersion": "1.0",
+    "orientation": "PORTRAIT",
+    "dimension": "TWO_D",
+    "template": "EMPTY",
+    "lastOpenedEpochMs": 0
+}

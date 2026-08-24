@@ -115,3 +115,45 @@ void PhysicsWorld::resolveGround(PhysicsBody& b) {
 }
 
 } // namespace nova
+
+namespace nova {
+std::string PhysicsWorld::raycast(float x1, float y1, float x2, float y2, float* outT) const {
+    const float dx = x2 - x1;
+    const float dy = y2 - y1;
+    std::string bestId;
+    float bestT = 2.0f;
+
+    for (const PhysicsBody& b : bodies_) {
+        // Slab method on the body AABB.
+        float tmin = 0.0f;
+        float tmax = 1.0f;
+        bool hit = true;
+
+        for (int axis = 0; axis < 2 && hit; ++axis) {
+            const float origin = axis == 0 ? x1 : y1;
+            const float dir = axis == 0 ? dx : dy;
+            const float lo = (axis == 0 ? b.x - b.halfW : b.y - b.halfH);
+            const float hi = (axis == 0 ? b.x + b.halfW : b.y + b.halfH);
+            if (std::fabs(dir) < 1e-8f) {
+                if (origin < lo || origin > hi) hit = false;
+            } else {
+                float t1 = (lo - origin) / dir;
+                float t2 = (hi - origin) / dir;
+                if (t1 > t2) std::swap(t1, t2);
+                tmin = std::max(tmin, t1);
+                tmax = std::min(tmax, t2);
+                if (tmin > tmax) hit = false;
+            }
+        }
+
+        if (hit && tmin >= 0.0f && tmin < bestT) {
+            bestT = tmin;
+            bestId = b.id;
+        }
+    }
+
+    if (outT) *outT = bestId.empty() ? -1.0f : bestT;
+    return bestId;
+}
+
+} // namespace nova
