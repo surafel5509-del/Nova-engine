@@ -24,6 +24,12 @@ object NativeEngine {
     external fun nativeSetScene(handle: Long, json: String)
 
     external fun nativeSetViewport(handle: Long, centerX: Float, centerY: Float, pixelsPerUnit: Float)
+    external fun nativeSetViewport3D(
+        handle: Long,
+        yawDeg: Float, pitchDeg: Float, distance: Float,
+        targetX: Float, targetY: Float, targetZ: Float,
+        fovDeg: Float,
+    )
     external fun nativeSetGridVisible(handle: Long, visible: Boolean)
 
     /** Uploads an RGBA8888 texture keyed by [key] (usually the project-relative path). */

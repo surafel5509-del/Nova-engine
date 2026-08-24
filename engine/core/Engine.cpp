@@ -25,19 +25,28 @@ void Engine::onSurfaceCreated() {
         LOGE("Renderer initialization failed: %s", error.c_str());
         return;
     }
+    if (!renderer3d_.initialize(&error)) {
+        LOGE("Renderer3D initialization failed: %s", error.c_str());
+        // 3D is optional; the 2D pipeline still works.
+    }
     glReady_ = true;
     LOGI("Nova engine surface created");
 }
 
 void Engine::onSurfaceChanged(int width, int height) {
     renderer_.setViewportSize(width, height);
+    renderer3d_.setViewportSize(width, height);
 }
 
 void Engine::onDrawFrame() {
     if (!glReady_) return;
     const auto start = std::chrono::steady_clock::now();
-    applyGameCameraIfEnabled();
-    renderer_.drawFrame(scene_, simulating_ ? &particles_ : nullptr);
+    if (scene_.mode3d) {
+        renderer3d_.drawFrame(scene_);
+    } else {
+        applyGameCameraIfEnabled();
+        renderer_.drawFrame(scene_, simulating_ ? &particles_ : nullptr);
+    }
     const auto end = std::chrono::steady_clock::now();
     frameMs_ = std::chrono::duration<float, std::milli>(end - start).count();
 
@@ -70,6 +79,11 @@ void Engine::setViewport(float centerX, float centerY, float pixelsPerUnit) {
     camera.centerY = centerY;
     camera.pixelsPerUnit = pixelsPerUnit > 0.0f ? pixelsPerUnit : 100.0f;
     renderer_.setCamera(camera);
+}
+
+void Engine::setViewport3D(float yawDeg, float pitchDeg, float distance,
+                           float targetX, float targetY, float targetZ, float fovDeg) {
+    renderer3d_.setCamera(yawDeg, pitchDeg, distance, targetX, targetY, targetZ, fovDeg);
 }
 
 void Engine::setGridVisible(bool visible) {
@@ -122,12 +136,14 @@ void Engine::startSimulation() {
     scripting_.logMessages().clear();
 
     simulating_ = true;
+    simElapsed_ = 0.0f;
     LOGI("Simulation started (%zu bodies, %zu emitters, %zu scripts)",
          physics_.bodies().size(), scene_.emitters.size(), scene_.scripts.size());
 }
 
 void Engine::stopSimulation() {
     simulating_ = false;
+    simElapsed_ = 0.0f;
     scripting_.stop();
     particles_.clear();
     physics_.clear();
@@ -136,6 +152,12 @@ void Engine::stopSimulation() {
 
 void Engine::stepSimulation(float dt) {
     if (!simulating_) return;
+    simElapsed_ += dt;
+
+    // Keyframe animations (tracks on sprite properties) apply at sim time.
+    if (!scene_.animations.empty()) {
+        AnimationSampler::apply(scene_, simElapsed_);
+    }
 
     // Scripts run first so script-set velocities/positions apply this frame.
     scripting_.update(dt, inputAxisX_, inputAxisY_, inputJump_);

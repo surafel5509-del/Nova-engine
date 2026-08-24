@@ -67,6 +67,15 @@ Java_dev_nova_editor_bridge_NativeEngine_nativeSetViewport(JNIEnv* /*env*/, jobj
 }
 
 JNIEXPORT void JNICALL
+Java_dev_nova_editor_bridge_NativeEngine_nativeSetViewport3D(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle,
+    jfloat yawDeg, jfloat pitchDeg, jfloat distance,
+    jfloat targetX, jfloat targetY, jfloat targetZ, jfloat fovDeg) {
+    if (auto* e = fromHandle(handle)) {
+        e->setViewport3D(yawDeg, pitchDeg, distance, targetX, targetY, targetZ, fovDeg);
+    }
+}
+
+JNIEXPORT void JNICALL
 Java_dev_nova_editor_bridge_NativeEngine_nativeSetGridVisible(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle, jboolean visible) {
     if (auto* e = fromHandle(handle)) e->setGridVisible(visible == JNI_TRUE);
 }

@@ -75,6 +75,55 @@ struct UiElementRecord {
     std::string textKey;         // texture key of the pre-rendered text (may be empty)
 };
 
+/** A 3D object (primitive mesh) in the scene. */
+struct Object3DRecord {
+    std::string id;
+    std::string shape;           // cube | cylinder | ground | plane
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+    float rx = 0.0f;             // degrees
+    float ry = 0.0f;
+    float rz = 0.0f;
+    float sx = 1.0f;
+    float sy = 1.0f;
+    float sz = 1.0f;
+    float r = 0.7f;
+    float g = 0.7f;
+    float b = 0.75f;
+    float a = 1.0f;
+    std::string texture;         // optional (reserved)
+    bool selected = false;
+};
+
+/** Directional light + ambient for the 3D scene. */
+struct DirectionalLight {
+    bool present = false;
+    float dirX = -0.4f;
+    float dirY = -1.0f;
+    float dirZ = -0.3f;
+    float r = 0.95f;
+    float g = 0.93f;
+    float b = 0.85f;
+    float ambientR = 0.18f;
+    float ambientG = 0.18f;
+    float ambientB = 0.20f;
+};
+
+/** One keyframe on an animation track. */
+struct AnimationKey {
+    float t = 0.0f;              // seconds
+    float value = 0.0f;
+};
+
+/** A track animating one property (x, y, rotation, scaleX, scaleY) of an entity. */
+struct AnimationTrack {
+    std::string entityId;
+    std::string property;        // x | y | rotation | scaleX | scaleY
+    std::vector<AnimationKey> keys;
+    bool loop = true;
+};
+
 /** Particle emitter parameters parsed from the render scene. */
 struct ParticleEmitterRecord {
     std::string id;
@@ -131,6 +180,7 @@ struct ScriptRecord {
  */
 struct RenderScene {
     int version = 1;
+    bool mode3d = false;         // true -> render via the 3D pipeline
     std::vector<SpriteInstance> sprites;
     std::vector<BodyRecord> bodies;
     std::vector<ParticleEmitterRecord> emitters;
@@ -138,6 +188,9 @@ struct RenderScene {
     std::vector<AudioSourceRecord> audioSources;
     std::vector<ScriptRecord> scripts;
     std::vector<UiElementRecord> uiElements;
+    std::vector<Object3DRecord> objects3d;
+    std::vector<AnimationTrack> animations;
+    DirectionalLight light;
     GameCamera gameCamera;
 
     /** Parses JSON; returns false (and leaves *this unchanged) on error. */

@@ -1,6 +1,7 @@
 package dev.nova.editor.project
 
 import dev.nova.editor.scene.EntityKind
+import dev.nova.editor.scene.MeshComponent
 import dev.nova.editor.scene.Scene
 import dev.nova.editor.scene.SceneOps
 import dev.nova.editor.scene.SceneJson
@@ -95,7 +96,12 @@ class ProjectRepository(private val rootDir: File) {
             lastOpenedEpochMs = nowEpochMs,
         )
         File(dir, PROJECT_FILE).writeText(SceneJson.encodeToString(config))
-        File(dir, "scenes/main.scene.json").writeText(serializeScene(templateScene(template)))
+        val sceneJson = if (dimension == ProjectDimension.THREE_D) {
+            serializeScene(templateScene3D())
+        } else {
+            serializeScene(templateScene(template))
+        }
+        File(dir, "scenes/main.scene.json").writeText(sceneJson)
         templateScript(template)?.let { script ->
             val scriptFile = File(dir, "scripts/player.lua")
             scriptFile.parentFile?.mkdirs()
@@ -261,6 +267,41 @@ class ProjectRepository(private val rootDir: File) {
             scene = SceneOps.add(scene, SceneOps.createEntity(EntityKind.CAMERA, "Main Camera"))
             scene
         }
+    }
+
+    /** 3D starter scene: ground + light + player cube + a couple of objects. */
+    fun templateScene3D(): Scene {
+        var scene = Scene(name = "Main 3D")
+        scene = SceneOps.add(scene, SceneOps.createEntity(EntityKind.CAMERA, "Main Camera"))
+        scene = SceneOps.add(scene, SceneOps.createEntity(EntityKind.LIGHT3D, "Sun"))
+        scene = SceneOps.add(
+            scene,
+            SceneOps.createEntity(EntityKind.MESH3D, "Ground").copy(
+                mesh = MeshComponent(shape = "ground", r = 0.3f, g = 0.35f, b = 0.3f),
+            ),
+        )
+        scene = SceneOps.add(
+            scene,
+            SceneOps.createEntity(EntityKind.MESH3D, "Player").copy(
+                transform = TransformComponent(x = 0f, y = 1f, z = 0f),
+                mesh = MeshComponent(shape = "cube", r = 0.3f, g = 0.7f, b = 0.95f),
+            ),
+        )
+        scene = SceneOps.add(
+            scene,
+            SceneOps.createEntity(EntityKind.MESH3D, "Enemy").copy(
+                transform = TransformComponent(x = 3f, y = 1f, z = -2f),
+                mesh = MeshComponent(shape = "cube", r = 0.9f, g = 0.3f, b = 0.3f),
+            ),
+        )
+        scene = SceneOps.add(
+            scene,
+            SceneOps.createEntity(EntityKind.MESH3D, "Pillar").copy(
+                transform = TransformComponent(x = -3f, y = 1.5f, z = -3f),
+                mesh = MeshComponent(shape = "cylinder", r = 0.6f, g = 0.55f, b = 0.5f),
+            ),
+        )
+        return scene
     }
 
     /** Starter Lua script for templates that need one (real gameplay logic). */

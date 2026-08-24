@@ -9,6 +9,8 @@
 #include "particles/ParticleSystem.h"
 #include "physics/PhysicsWorld.h"
 #include "rendering/GlesRenderer.h"
+#include "rendering/Renderer3D.h"
+#include "scene/AnimationSampler.h"
 #include "scene/RenderScene.h"
 #include "scripting/LuaScriptEngine.h"
 
@@ -31,6 +33,9 @@ public:
 
     void setSceneJson(const std::string& json);
     void setViewport(float centerX, float centerY, float pixelsPerUnit);
+    /** 3D orbit camera (used when the scene is in 3D mode). */
+    void setViewport3D(float yawDeg, float pitchDeg, float distance,
+                       float targetX, float targetY, float targetZ, float fovDeg);
     void setGridVisible(bool visible);
     void loadTexture(const std::string& key, const unsigned char* rgba, int width, int height);
     void removeTexture(const std::string& key);
@@ -76,6 +81,7 @@ private:
     void updateCameraFollow(float dt);
 
     GlesRenderer renderer_;
+    Renderer3D renderer3d_;
     RenderScene scene_;
     PhysicsWorld physics_;
     ParticleSystem particles_;
@@ -83,6 +89,7 @@ private:
     bool glReady_ = false;
     bool simulating_ = false;
     bool useGameCamera_ = false;
+    float simElapsed_ = 0.0f;
     std::vector<std::pair<std::string, std::string>> uiTextEvents_;
 
     // Animation state: accumulated time per sprite id.

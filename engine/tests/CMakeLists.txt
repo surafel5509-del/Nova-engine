@@ -16,10 +16,13 @@ add_executable(nova_tests
     test_physics.cpp
     test_particles.cpp
     test_scripting.cpp
+    test_3d.cpp
     ../scene/RenderScene.cpp
+    ../scene/AnimationSampler.cpp
     ../physics/PhysicsWorld.cpp
     ../particles/ParticleSystem.cpp
     ../scripting/LuaScriptEngine.cpp
+    ../rendering/Mesh3D.cpp
 )
 
 target_include_directories(nova_tests PRIVATE

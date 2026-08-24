@@ -132,6 +132,7 @@ void testTilemapAndEmitterParsing() {
 int runPhysicsTests();
 int runParticleTests();
 int runScriptingTests();
+int run3DTests();
 
 int main() {
     testSceneParsing();
@@ -144,7 +145,8 @@ int main() {
     const int physicsFailures = runPhysicsTests();
     const int particleFailures = runParticleTests();
     const int scriptingFailures = runScriptingTests();
-    const int total = failures + physicsFailures + particleFailures + scriptingFailures;
+    const int threeDFailures = run3DTests();
+    const int total = failures + physicsFailures + particleFailures + scriptingFailures + threeDFailures;
     std::printf("TOTAL: %d failures\n", total);
     return total == 0 ? 0 : 1;
 }

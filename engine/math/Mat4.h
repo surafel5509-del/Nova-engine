@@ -56,10 +56,93 @@ struct Mat4 {
         return r;
     }
 
+    /** Rotation about the X axis (degrees). */
+    static Mat4 rotationX(float deg) {
+        const float rad = deg * 3.14159265f / 180.0f;
+        Mat4 r = identity();
+        r.m[5] = std::cos(rad);
+        r.m[6] = std::sin(rad);
+        r.m[9] = -std::sin(rad);
+        r.m[10] = std::cos(rad);
+        return r;
+    }
+
+    /** Rotation about the Y axis (degrees). */
+    static Mat4 rotationY(float deg) {
+        const float rad = deg * 3.14159265f / 180.0f;
+        Mat4 r = identity();
+        r.m[0] = std::cos(rad);
+        r.m[2] = -std::sin(rad);
+        r.m[8] = std::sin(rad);
+        r.m[10] = std::cos(rad);
+        return r;
+    }
+
+    /** Rotation about the Z axis (degrees). */
+    static Mat4 rotationZ(float deg) {
+        const float rad = deg * 3.14159265f / 180.0f;
+        Mat4 r = identity();
+        r.m[0] = std::cos(rad);
+        r.m[1] = std::sin(rad);
+        r.m[4] = -std::sin(rad);
+        r.m[5] = std::cos(rad);
+        return r;
+    }
+
+    /** Perspective projection (vertical fov in degrees). */
+    static Mat4 perspective(float fovYDeg, float aspect, float nearZ, float farZ) {
+        const float rad = fovYDeg * 3.14159265f / 180.0f;
+        const float f = 1.0f / std::tan(rad / 2.0f);
+        Mat4 r{};
+        r.m[0] = f / aspect;
+        r.m[5] = f;
+        r.m[10] = (farZ + nearZ) / (nearZ - farZ);
+        r.m[11] = -1.0f;
+        r.m[14] = (2.0f * farZ * nearZ) / (nearZ - farZ);
+        return r;
+    }
+
+    /** Look-at view matrix (right-handed, GL convention). */
+    static Mat4 lookAt(float ex, float ey, float ez,
+                       float cx, float cy, float cz,
+                       float ux, float uy, float uz) {
+        float fx = cx - ex, fy = cy - ey, fz = cz - ez;
+        float fl = std::sqrt(fx * fx + fy * fy + fz * fz);
+        if (fl < 1e-6f) fl = 1e-6f;
+        fx /= fl; fy /= fl; fz /= fl;
+        // s = f x u
+        float sx = fy * uz - fz * uy;
+        float sy = fz * ux - fx * uz;
+        float sz = fx * uy - fy * ux;
+        float sl = std::sqrt(sx * sx + sy * sy + sz * sz);
+        if (sl < 1e-6f) sl = 1e-6f;
+        sx /= sl; sy /= sl; sz /= sl;
+        // u' = s x f
+        const float upx = sy * fz - sz * fy;
+        const float upy = sz * fx - sx * fz;
+        const float upz = sx * fy - sy * fx;
+
+        Mat4 r = identity();
+        r.m[0] = sx;  r.m[4] = sy;  r.m[8] = sz;
+        r.m[1] = upx; r.m[5] = upy; r.m[9] = upz;
+        r.m[2] = -fx; r.m[6] = -fy; r.m[10] = -fz;
+        r.m[12] = -(sx * ex + sy * ey + sz * ez);
+        r.m[13] = -(upx * ex + upy * ey + upz * ez);
+        r.m[14] = (fx * ex + fy * ey + fz * ez);
+        return r;
+    }
+
     /** Transforms a 2D point (z=0, w=1). */
     void transformPoint(float x, float y, float& outX, float& outY) const {
         outX = m[0] * x + m[4] * y + m[12];
         outY = m[1] * x + m[5] * y + m[13];
+    }
+
+    /** Transforms a 3D point (w=1). */
+    void transformPoint3(float x, float y, float z, float& outX, float& outY, float& outZ) const {
+        outX = m[0] * x + m[4] * y + m[8] * z + m[12];
+        outY = m[1] * x + m[5] * y + m[9] * z + m[13];
+        outZ = m[2] * x + m[6] * y + m[10] * z + m[14];
     }
 };
 

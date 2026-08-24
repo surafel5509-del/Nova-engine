@@ -46,6 +46,7 @@ bool RenderScene::parseFrom(const std::string& jsonText, std::string* outError) 
 
     RenderScene next;
     next.version = static_cast<int>(getFloat(root, "version", 1.0f));
+    next.mode3d = getBool(root, "mode3d", false);
 
     for (const auto& js : root["sprites"]) {
         if (!js.is_object()) continue;
@@ -123,6 +124,67 @@ bool RenderScene::parseFrom(const std::string& jsonText, std::string* outError) 
             u.a = getFloat(ju, "a", 0.9f);
             u.textKey = getString(ju, "textKey", "");
             next.uiElements.push_back(std::move(u));
+        }
+    }
+
+    if (root.contains("objects3d") && root["objects3d"].is_array()) {
+        for (const auto& jo : root["objects3d"]) {
+            if (!jo.is_object()) continue;
+            Object3DRecord o;
+            o.id = getString(jo, "id", "");
+            o.shape = getString(jo, "shape", "cube");
+            o.x = getFloat(jo, "x", 0.0f);
+            o.y = getFloat(jo, "y", 0.0f);
+            o.z = getFloat(jo, "z", 0.0f);
+            o.rx = getFloat(jo, "rx", 0.0f);
+            o.ry = getFloat(jo, "ry", 0.0f);
+            o.rz = getFloat(jo, "rz", 0.0f);
+            o.sx = getFloat(jo, "sx", 1.0f);
+            o.sy = getFloat(jo, "sy", 1.0f);
+            o.sz = getFloat(jo, "sz", 1.0f);
+            o.r = getFloat(jo, "r", 0.7f);
+            o.g = getFloat(jo, "g", 0.7f);
+            o.b = getFloat(jo, "b", 0.75f);
+            o.a = getFloat(jo, "a", 1.0f);
+            o.texture = getString(jo, "texture", "");
+            o.selected = getBool(jo, "selected", false);
+            next.objects3d.push_back(std::move(o));
+        }
+    }
+
+    if (root.contains("light") && root["light"].is_object()) {
+        const auto& jl = root["light"];
+        next.light.present = true;
+        next.light.dirX = getFloat(jl, "dirX", -0.4f);
+        next.light.dirY = getFloat(jl, "dirY", -1.0f);
+        next.light.dirZ = getFloat(jl, "dirZ", -0.3f);
+        next.light.r = getFloat(jl, "r", 0.95f);
+        next.light.g = getFloat(jl, "g", 0.93f);
+        next.light.b = getFloat(jl, "b", 0.85f);
+        next.light.ambientR = getFloat(jl, "ambientR", 0.18f);
+        next.light.ambientG = getFloat(jl, "ambientG", 0.18f);
+        next.light.ambientB = getFloat(jl, "ambientB", 0.20f);
+    }
+
+    if (root.contains("animations") && root["animations"].is_array()) {
+        for (const auto& ja : root["animations"]) {
+            if (!ja.is_object()) continue;
+            AnimationTrack track;
+            track.entityId = getString(ja, "entityId", "");
+            track.property = getString(ja, "property", "x");
+            track.loop = getBool(ja, "loop", true);
+            if (ja.contains("keys") && ja["keys"].is_array()) {
+                for (const auto& jk : ja["keys"]) {
+                    if (!jk.is_object()) continue;
+                    AnimationKey key;
+                    key.t = getFloat(jk, "t", 0.0f);
+                    key.value = getFloat(jk, "value", 0.0f);
+                    track.keys.push_back(key);
+                }
+            }
+            if (!track.entityId.empty() && !track.keys.empty()) {
+                next.animations.push_back(std::move(track));
+            }
         }
     }
 

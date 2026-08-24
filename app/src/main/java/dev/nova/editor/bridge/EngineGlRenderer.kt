@@ -68,6 +68,22 @@ class EngineGlRenderer : GLSurfaceView.Renderer {
         queue { NativeEngine.nativeSetViewport(it, centerX, centerY, pixelsPerUnit) }
     }
 
+    // 3D orbit camera state, re-applied after GL (re)creation.
+    @Volatile private var cam3dYaw = 45f
+    @Volatile private var cam3dPitch = 30f
+    @Volatile private var cam3dDist = 12f
+    @Volatile private var cam3dTx = 0f
+    @Volatile private var cam3dTy = 0.5f
+    @Volatile private var cam3dTz = 0f
+    @Volatile private var cam3dFov = 50f
+
+    fun submitViewport3D(yaw: Float, pitch: Float, distance: Float,
+                         tx: Float, ty: Float, tz: Float, fov: Float) {
+        cam3dYaw = yaw; cam3dPitch = pitch; cam3dDist = distance
+        cam3dTx = tx; cam3dTy = ty; cam3dTz = tz; cam3dFov = fov
+        queue { NativeEngine.nativeSetViewport3D(it, yaw, pitch, distance, tx, ty, tz, fov) }
+    }
+
     fun submitGridVisible(visible: Boolean) {
         gridVisible = visible
         queue { NativeEngine.nativeSetGridVisible(it, visible) }
@@ -104,6 +120,7 @@ class EngineGlRenderer : GLSurfaceView.Renderer {
         // Re-apply editor state (covers GL context loss / surface recreation).
         NativeEngine.nativeSetGridVisible(h, gridVisible)
         NativeEngine.nativeSetViewport(h, viewportCenterX, viewportCenterY, viewportPpu)
+        NativeEngine.nativeSetViewport3D(h, cam3dYaw, cam3dPitch, cam3dDist, cam3dTx, cam3dTy, cam3dTz, cam3dFov)
         NativeEngine.nativeSetUseGameCamera(h, useGameCamera)
         NativeEngine.nativeSetShowPhysicsDebug(h, showPhysicsDebug)
         synchronized(textures) {

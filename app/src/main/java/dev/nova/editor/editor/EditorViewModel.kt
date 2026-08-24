@@ -61,6 +61,13 @@ class EditorViewModel(
     var camera by mutableStateOf(Camera2D())
         private set
 
+    var camera3d by mutableStateOf(Camera3D())
+        private set
+
+    /** True when this project is a 3D project (from config.dimension). */
+    val is3D: Boolean
+        get() = config.dimension == "THREE_D" || config.dimension == "TWO_D_PLUS_3D"
+
     var gridVisible by mutableStateOf(true)
         private set
 
@@ -164,6 +171,35 @@ class EditorViewModel(
 
     fun updateCamera(next: Camera2D) {
         camera = next
+    }
+
+    fun updateCamera3D(next: Camera3D) {
+        camera3d = next
+    }
+
+    /** 3D picking: casts a ray from the camera through a normalized screen point. */
+    fun pick3D(nx: Float, ny: Float, aspect: Float): String? {
+        val (origin, dir) = camera3d.screenRay(nx, ny, aspect)
+        var bestId: String? = null
+        var bestT = Float.MAX_VALUE
+        for (e in scene.entities) {
+            if (!e.enabled || e.mesh == null) continue
+            val wt = SceneOps.worldTransform(scene, e.id)
+            val hx = maxOf(wt.scaleX, 0.2f)
+            val hy = maxOf(wt.scaleY, 0.2f)
+            val hz = maxOf(wt.scaleZ, 0.2f)
+            val t = Camera3D.rayAabb(
+                origin[0], origin[1], origin[2],
+                dir[0], dir[1], dir[2],
+                wt.x - hx, wt.y - hy, wt.z - hz,
+                wt.x + hx, wt.y + hy, wt.z + hz,
+            ) ?: continue
+            if (t < bestT) {
+                bestT = t
+                bestId = e.id
+            }
+        }
+        return bestId
     }
 
     // ---- Entity operations (all undoable) ----
@@ -410,6 +446,8 @@ class EditorViewModel(
         private set
     var aiLastReply by mutableStateOf<String?>(null)
         private set
+    var agentProgress by mutableStateOf(dev.nova.editor.ai.AgentProgress())
+        private set
 
     /**
      * Sends the prompt + scene summary to the configured provider, then
@@ -445,6 +483,43 @@ class EditorViewModel(
             } catch (e: Exception) {
                 log(LogLevel.ERROR, "AI error: ${e.message}")
                 aiLastReply = "Error: ${e.message}"
+            } finally {
+                aiBusy = false
+            }
+        }
+    }
+
+    /**
+     * Runs the autonomous agent: plan -> execute tasks -> verify -> report,
+     * with live progress in [agentProgress] and the console.
+     */
+    fun runAgent(settings: AiSettings, goal: String) {
+        if (aiBusy) return
+        if (goal.isBlank()) {
+            log(LogLevel.WARNING, "Agent: goal is empty")
+            return
+        }
+        aiBusy = true
+        agentProgress = dev.nova.editor.ai.AgentProgress(running = true)
+        val runner = dev.nova.editor.ai.AgentRunner(
+            sceneProvider = { scene },
+            sceneApplier = { before, reply -> AiActionApplier.apply(before, reply, projectPath).scene },
+            onSceneApplied = { newScene ->
+                if (newScene !== scene) {
+                    scene = undoStack.push(scene, ReplaceSceneCommand("AI agent edit", scene, newScene))
+                    bumpRender()
+                }
+            },
+            onProgress = { progress -> agentProgress = progress },
+        )
+        viewModelScope.launch {
+            try {
+                runner.run(settings, goal) { prompt ->
+                    withContext(Dispatchers.IO) { AiClient.chat(settings, AI_SYSTEM_PROMPT, prompt) }
+                }
+                log(LogLevel.INFO, "Agent finished: ${agentProgress.log.lastOrNull() ?: "done"}")
+            } catch (e: Exception) {
+                log(LogLevel.ERROR, "Agent error: ${e.message}")
             } finally {
                 aiBusy = false
             }
@@ -495,7 +570,7 @@ class EditorViewModel(
     // ---- Render push ----
 
     fun renderSceneJson(): String =
-        SceneJson.encodeToString(buildRenderScene(scene, selectedId))
+        SceneJson.encodeToString(buildRenderScene(scene, selectedId, mode3d = is3D))
 
     private fun markChanged(message: String) {
         dirty = true

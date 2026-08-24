@@ -48,6 +48,7 @@ import java.util.Locale
 fun ProjectManagerScreen(
     repository: ProjectRepository,
     onOpenProject: (String) -> Unit,
+    onOpenSettings: () -> Unit = {},
 ) {
     var projects by remember { mutableStateOf(repository.listProjects()) }
     var showCreateDialog by remember { mutableStateOf(false) }
@@ -58,17 +59,22 @@ fun ProjectManagerScreen(
             .fillMaxSize()
             .padding(24.dp),
     ) {
-        Text(
-            text = "Nova Engine",
-            style = MaterialTheme.typography.headlineLarge,
-            color = NovaColors.Primary,
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            text = "Project Manager",
-            style = MaterialTheme.typography.titleMedium,
-            color = NovaColors.TextDim,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "Nova Engine",
+                    style = MaterialTheme.typography.headlineLarge,
+                    color = NovaColors.Primary,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = "Project Manager",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = NovaColors.TextDim,
+                )
+            }
+            OutlinedButton(onClick = onOpenSettings) { Text("⚙ Settings") }
+        }
         Spacer(Modifier.height(24.dp))
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -208,16 +214,22 @@ private fun CreateProjectDialog(
 
                 Text("Dimension", style = MaterialTheme.typography.labelMedium, color = NovaColors.TextDim)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ProjectDimension.entries.forEach { option ->
-                        val supported = option == ProjectDimension.TWO_D
+                    // 2D and 3D are both supported; 2D+3D is a future mixed mode.
+                    listOf(ProjectDimension.TWO_D, ProjectDimension.THREE_D).forEach { option ->
                         FilterChip(
                             selected = dimension == option,
-                            onClick = { if (supported) dimension = option },
-                            enabled = supported,
-                            label = { Text(if (supported) option.label else "${option.label} (Phase 6)") },
+                            onClick = { dimension = option },
+                            label = { Text(if (option == ProjectDimension.TWO_D) "2D" else "3D") },
                         )
                     }
                 }
+                Text(
+                    if (dimension == ProjectDimension.THREE_D)
+                        "3D project: meshes, lighting, orbit camera, 3D editor."
+                    else "2D project: sprites, tilemaps, physics, scripts.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = NovaColors.TextDim,
+                )
 
                 Text("Template", style = MaterialTheme.typography.labelMedium, color = NovaColors.TextDim)
                 TemplateDropdown(template) { template = it }

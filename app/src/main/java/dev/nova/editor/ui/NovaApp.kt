@@ -14,6 +14,7 @@ import java.io.File
 /** Minimal state-based navigation (avoids the navigation-compose dependency). */
 sealed interface AppDestination {
     data object ProjectManager : AppDestination
+    data object Settings : AppDestination
     data class Editor(val projectPath: String) : AppDestination
 }
 
@@ -23,16 +24,24 @@ fun NovaApp() {
     val repository = remember {
         ProjectRepository(File(context.filesDir, "projects"))
     }
+    val settingsStore = remember { dev.nova.editor.settings.SettingsStore(context) }
+    var settings by remember { mutableStateOf(settingsStore.load()) }
     var destination by remember { mutableStateOf<AppDestination>(AppDestination.ProjectManager) }
 
     when (val dest = destination) {
         AppDestination.ProjectManager -> ProjectManagerScreen(
             repository = repository,
             onOpenProject = { path -> destination = AppDestination.Editor(path) },
+            onOpenSettings = { destination = AppDestination.Settings },
+        )
+        AppDestination.Settings -> dev.nova.editor.ui.settings.SettingsScreen(
+            onBack = { destination = AppDestination.ProjectManager },
+            onSettingsChanged = { settings = it },
         )
         is AppDestination.Editor -> EditorScreen(
             repository = repository,
             projectPath = dest.projectPath,
+            layoutMode = settings.layoutMode,
             onBack = { destination = AppDestination.ProjectManager },
         )
     }

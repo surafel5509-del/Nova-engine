@@ -55,8 +55,8 @@ import dev.nova.editor.project.ProjectRepository
 import dev.nova.editor.ui.theme.NovaColors
 
 private enum class BottomTab(val label: String) {
-    HIERARCHY("Hierarchy"), INSPECTOR("Inspector"), ASSETS("Assets"),
-    SCRIPTS("Scripts"), AI("AI"), CONSOLE("Console")
+    HIERARCHY("Hierarchy"), INSPECTOR("Inspector"), ASSETS("Library"),
+    FILES("Files"), SCRIPTS("Scripts"), TIMELINE("Timeline"), AI("AI"), CONSOLE("Console")
 }
 
 /**
@@ -67,6 +67,7 @@ private enum class BottomTab(val label: String) {
 fun EditorScreen(
     repository: ProjectRepository,
     projectPath: String,
+    layoutMode: dev.nova.editor.settings.LayoutMode = dev.nova.editor.settings.LayoutMode.AUTO,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -101,8 +102,13 @@ fun EditorScreen(
     }
 
     val configuration = LocalConfiguration.current
-    val isWideLayout = configuration.screenWidthDp >= 840 ||
-        configuration.screenWidthDp > configuration.screenHeightDp
+    val isWideLayout = when (layoutMode) {
+        dev.nova.editor.settings.LayoutMode.DESKTOP -> true
+        dev.nova.editor.settings.LayoutMode.MOBILE -> false
+        dev.nova.editor.settings.LayoutMode.AUTO ->
+            configuration.screenWidthDp >= 840 ||
+                configuration.screenWidthDp > configuration.screenHeightDp
+    }
 
     Surface(
         modifier = Modifier
@@ -144,8 +150,10 @@ fun EditorScreen(
                     when (bottomTab) {
                         BottomTab.HIERARCHY -> HierarchyPanel(viewModel)
                         BottomTab.INSPECTOR -> InspectorPanel(viewModel, importTexture)
-                        BottomTab.ASSETS -> AssetBrowserPanel(viewModel)
+                        BottomTab.ASSETS -> AssetsLibraryPanel(viewModel)
+                        BottomTab.FILES -> FileManagerPanel(viewModel)
                         BottomTab.SCRIPTS -> ScriptEditorPanel(viewModel)
+                        BottomTab.TIMELINE -> TimelinePanel(viewModel)
                         BottomTab.AI -> AiAssistantPanel(viewModel)
                         BottomTab.CONSOLE -> ConsolePanel(viewModel)
                     }

@@ -95,7 +95,7 @@ fun AiAssistantPanel(
                 onClick = { viewModel.sendAiPrompt(settings, prompt) },
                 enabled = !viewModel.aiBusy && settings.apiKey.isNotBlank() && prompt.isNotBlank(),
             ) {
-                if (viewModel.aiBusy) {
+                if (viewModel.aiBusy && !viewModel.agentProgress.running) {
                     CircularProgressIndicator(
                         modifier = Modifier.height(16.dp),
                         strokeWidth = 2.dp,
@@ -105,8 +105,65 @@ fun AiAssistantPanel(
                     Text("Build with AI")
                 }
             }
+            Button(
+                onClick = { viewModel.runAgent(settings, prompt) },
+                enabled = !viewModel.aiBusy && settings.apiKey.isNotBlank() && prompt.isNotBlank(),
+            ) { Text("🤖 Agent") }
             TextButton(onClick = { prompt = QUICK_PROMPTS.random() }, enabled = !viewModel.aiBusy) {
                 Text("Idea")
+            }
+        }
+
+        // ---- Autonomous agent: plan + live task progress ----
+        val agent = viewModel.agentProgress
+        if (agent.plan.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Agent plan (${agent.plan.count { it.status == dev.nova.editor.ai.TaskStatus.DONE }}/${agent.plan.size})",
+                style = MaterialTheme.typography.titleSmall,
+                color = NovaColors.Primary,
+            )
+            agent.plan.forEach { task ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        when (task.status) {
+                            dev.nova.editor.ai.TaskStatus.DONE -> "✓"
+                            dev.nova.editor.ai.TaskStatus.RUNNING -> "▶"
+                            dev.nova.editor.ai.TaskStatus.FAILED -> "✗"
+                            dev.nova.editor.ai.TaskStatus.PENDING -> "○"
+                        },
+                        color = when (task.status) {
+                            dev.nova.editor.ai.TaskStatus.DONE -> NovaColors.Accent
+                            dev.nova.editor.ai.TaskStatus.RUNNING -> NovaColors.Primary
+                            dev.nova.editor.ai.TaskStatus.FAILED -> NovaColors.Error
+                            dev.nova.editor.ai.TaskStatus.PENDING -> NovaColors.TextDim
+                        },
+                        modifier = Modifier.padding(end = 6.dp),
+                    )
+                    Text(
+                        "${task.number}. ${task.title}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = NovaColors.Text,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (task.elapsedMs > 0) {
+                        Text(
+                            formatElapsed(task.elapsedMs),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = NovaColors.TextDim,
+                        )
+                    }
+                }
+            }
+            if (agent.log.isNotEmpty()) {
+                Spacer(Modifier.height(6.dp))
+                Text("Agent log", style = MaterialTheme.typography.labelSmall, color = NovaColors.TextDim)
+                agent.log.takeLast(12).forEach { line ->
+                    Text(line, style = MaterialTheme.typography.labelSmall, color = NovaColors.TextDim)
+                }
+            }
+            agent.error?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = NovaColors.Warning)
             }
         }
 
@@ -219,4 +276,9 @@ private fun AiSettingsDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
+}
+
+private fun formatElapsed(ms: Long): String {
+    val totalSec = ms / 1000
+    return "%d:%02d".format(totalSec / 60, totalSec % 60)
 }

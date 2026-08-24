@@ -61,6 +61,10 @@ fun Viewport(
         val cam = viewModel.camera
         renderer.submitViewport(cam.centerX, cam.centerY, cam.pixelsPerUnit)
     }
+    LaunchedEffect(viewModel.camera3d) {
+        val c = viewModel.camera3d
+        renderer.submitViewport3D(c.yaw, c.pitch, c.distance, c.targetX, c.targetY, c.targetZ, c.fov)
+    }
     LaunchedEffect(viewModel.gridVisible) {
         renderer.submitGridVisible(viewModel.gridVisible)
     }
@@ -215,7 +219,14 @@ private suspend fun PointerInputScope.handleViewportGestures(
                 if (pressed.isEmpty()) {
                     if (!moved && !sawSecondPointer) {
                         val world = screenToWorld(startPos)
-                        if (viewModel.playState == PlayState.PLAYING) {
+                        if (viewModel.is3D) {
+                            // 3D: tap picks the nearest 3D object via camera ray.
+                            val size = viewportSizePx()
+                            val nx = (startPos.x / size.x) * 2f - 1f
+                            val ny = 1f - (startPos.y / size.y) * 2f
+                            val aspect = if (size.y > 0) size.x / size.y else 1f
+                            viewModel.select(viewModel.pick3D(nx, ny, aspect))
+                        } else if (viewModel.playState == PlayState.PLAYING) {
                             // During play, taps hit-test UI elements for scripts.
                             rendererRef?.queue { h -> NativeEngine.nativeOnTap(h, world.x, world.y) }
                         } else if (viewModel.activeTool == EditorTool.TILE) {
@@ -244,18 +255,29 @@ private suspend fun PointerInputScope.handleViewportGestures(
                             mode = GestureMode.NONE
                         }
                     } else {
-                        if (prevPinchDistance > 0f && distance > 0f) {
-                            val size = viewportSizePx()
-                            viewModel.updateCamera(
-                                viewModel.camera.zoomAt(
-                                    distance / prevPinchDistance,
-                                    centroid.x, centroid.y, size.x, size.y,
-                                ),
-                            )
-                        }
-                        val panDelta = centroid - prevCentroid
-                        if (panDelta != Offset.Zero) {
-                            viewModel.updateCamera(viewModel.camera.panByScreen(panDelta.x, panDelta.y))
+                        if (viewModel.is3D) {
+                            // 3D: pinch = dolly, two-finger drag = pan target.
+                            if (prevPinchDistance > 0f && distance > 0f) {
+                                viewModel.updateCamera3D(viewModel.camera3d.zoom(distance / prevPinchDistance))
+                            }
+                            val panDelta = centroid - prevCentroid
+                            if (panDelta != Offset.Zero) {
+                                viewModel.updateCamera3D(viewModel.camera3d.pan(panDelta.x, panDelta.y))
+                            }
+                        } else {
+                            if (prevPinchDistance > 0f && distance > 0f) {
+                                val size = viewportSizePx()
+                                viewModel.updateCamera(
+                                    viewModel.camera.zoomAt(
+                                        distance / prevPinchDistance,
+                                        centroid.x, centroid.y, size.x, size.y,
+                                    ),
+                                )
+                            }
+                            val panDelta = centroid - prevCentroid
+                            if (panDelta != Offset.Zero) {
+                                viewModel.updateCamera(viewModel.camera.panByScreen(panDelta.x, panDelta.y))
+                            }
                         }
                     }
                     prevPinchDistance = distance
@@ -271,11 +293,12 @@ private suspend fun PointerInputScope.handleViewportGestures(
                     (position - startPos).getDistance() > viewConfiguration.touchSlop
                 ) {
                     moved = true
-                    mode = when (viewModel.activeTool) {
-                        EditorTool.PAN -> GestureMode.CAMERA_PAN
-                        EditorTool.ZOOM -> GestureMode.CAMERA_ZOOM
-                        EditorTool.TILE -> GestureMode.TILE_PAINT
-                        EditorTool.SELECT, EditorTool.MOVE -> {
+                    mode = when {
+                        viewModel.is3D -> GestureMode.CAMERA_PAN   // 1-finger: orbit
+                        viewModel.activeTool == EditorTool.PAN -> GestureMode.CAMERA_PAN
+                        viewModel.activeTool == EditorTool.ZOOM -> GestureMode.CAMERA_ZOOM
+                        viewModel.activeTool == EditorTool.TILE -> GestureMode.TILE_PAINT
+                        else -> {
                             val world = screenToWorld(startPos)
                             val hit = viewModel.pickAt(world.x, world.y)
                             if (hit != null) {
@@ -303,16 +326,26 @@ private suspend fun PointerInputScope.handleViewportGestures(
                                 viewModel.paintTileAt(mapId, world.x, world.y, viewModel.tileBrush)
                             }
                         }
-                        GestureMode.CAMERA_PAN ->
-                            viewModel.updateCamera(viewModel.camera.panByScreen(delta.x, delta.y))
+                        GestureMode.CAMERA_PAN -> {
+                            if (viewModel.is3D) {
+                                // 1-finger drag orbits the 3D camera.
+                                viewModel.updateCamera3D(viewModel.camera3d.rotate(-delta.x * 0.3f, delta.y * 0.3f))
+                            } else {
+                                viewModel.updateCamera(viewModel.camera.panByScreen(delta.x, delta.y))
+                            }
+                        }
                         GestureMode.CAMERA_ZOOM -> {
-                            // Vertical drag zooms: up = in, down = out.
-                            val factor = 1f + (-delta.y) / 600f
-                            if (factor > 0f) {
-                                val size = viewportSizePx()
-                                viewModel.updateCamera(
-                                    viewModel.camera.zoomAt(factor, position.x, position.y, size.x, size.y),
-                                )
+                            if (viewModel.is3D) {
+                                val factor = 1f + (-delta.y) / 600f
+                                if (factor > 0f) viewModel.updateCamera3D(viewModel.camera3d.zoom(factor))
+                            } else {
+                                val factor = 1f + (-delta.y) / 600f
+                                if (factor > 0f) {
+                                    val size = viewportSizePx()
+                                    viewModel.updateCamera(
+                                        viewModel.camera.zoomAt(factor, position.x, position.y, size.x, size.y),
+                                    )
+                                }
                             }
                         }
                         GestureMode.NONE -> Unit

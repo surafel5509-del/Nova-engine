@@ -11,9 +11,14 @@ const val SCENE_FORMAT_VERSION = 1
 data class TransformComponent(
     val x: Float = 0f,
     val y: Float = 0f,
-    val rotation: Float = 0f,          // degrees, counter-clockwise
+    val z: Float = 0f,               // used by 3D objects
+    val rotation: Float = 0f,        // degrees, counter-clockwise (2D)
+    val rotationX: Float = 0f,       // 3D Euler rotation (degrees)
+    val rotationY: Float = 0f,
+    val rotationZ: Float = 0f,
     val scaleX: Float = 1f,
     val scaleY: Float = 1f,
+    val scaleZ: Float = 1f,          // 3D scale
 )
 
 @Serializable
@@ -157,8 +162,54 @@ data class UiComponent(
 
 enum class EntityKind {
     EMPTY, SPRITE, CAMERA, PHYSICS_BODY, ANIMATED_SPRITE, PARTICLE_SYSTEM,
-    TILEMAP, AUDIO_SOURCE, UI_ELEMENT,
+    TILEMAP, AUDIO_SOURCE, UI_ELEMENT, MESH3D, LIGHT3D,
 }
+
+/** A 3D primitive object (cube, cylinder, ground plane). */
+@Serializable
+data class MeshComponent(
+    val shape: String = "cube",      // cube | cylinder | ground | plane
+    val r: Float = 0.7f,
+    val g: Float = 0.7f,
+    val b: Float = 0.75f,
+    val a: Float = 1f,
+    val texturePath: String? = null, // reserved
+)
+
+/** Directional light + ambient for 3D scenes (one per scene is typical). */
+@Serializable
+data class LightComponent(
+    val dirX: Float = -0.4f,
+    val dirY: Float = -1f,
+    val dirZ: Float = -0.3f,
+    val r: Float = 0.95f,
+    val g: Float = 0.93f,
+    val b: Float = 0.85f,
+    val ambientR: Float = 0.18f,
+    val ambientG: Float = 0.18f,
+    val ambientB: Float = 0.20f,
+)
+
+/** One keyframe on an animation track. */
+@Serializable
+data class AnimationKey(
+    val t: Float,                    // seconds
+    val value: Float,
+)
+
+/** One track: animates one property of this entity. */
+@Serializable
+data class AnimationTrackData(
+    val property: String,            // x | y | rotation | scaleX | scaleY
+    val keys: List<AnimationKey> = emptyList(),
+    val loop: Boolean = true,
+)
+
+/** Keyframe animation clip: a set of property tracks on this entity. */
+@Serializable
+data class AnimationClipComponent(
+    val tracks: List<AnimationTrackData> = emptyList(),
+)
 
 /**
  * Immutable editor entity. Components are nullable; presence = attached.
@@ -181,10 +232,15 @@ data class Entity(
     val audioSource: AudioSourceComponent? = null,
     val script: ScriptComponent? = null,
     val ui: UiComponent? = null,
+    val mesh: MeshComponent? = null,
+    val light: LightComponent? = null,
+    val animation: AnimationClipComponent? = null,
 ) {
     val kind: EntityKind
         get() = when {
             camera != null -> EntityKind.CAMERA
+            mesh != null -> EntityKind.MESH3D
+            light != null -> EntityKind.LIGHT3D
             ui != null -> EntityKind.UI_ELEMENT
             tilemap != null -> EntityKind.TILEMAP
             audioSource != null && sprite == null -> EntityKind.AUDIO_SOURCE
@@ -227,6 +283,8 @@ object SceneOps {
             EntityKind.TILEMAP -> base.copy(tilemap = TilemapComponent())
             EntityKind.AUDIO_SOURCE -> base.copy(audioSource = AudioSourceComponent())
             EntityKind.UI_ELEMENT -> base.copy(ui = UiComponent())
+            EntityKind.MESH3D -> base.copy(mesh = MeshComponent())
+            EntityKind.LIGHT3D -> base.copy(light = LightComponent())
         }
     }
 
@@ -240,6 +298,8 @@ object SceneOps {
         EntityKind.TILEMAP -> "Tilemap"
         EntityKind.AUDIO_SOURCE -> "Audio Source"
         EntityKind.UI_ELEMENT -> "UI Element"
+        EntityKind.MESH3D -> "3D Object"
+        EntityKind.LIGHT3D -> "Light"
     }
 
     fun add(scene: Scene, entity: Entity): Scene {
@@ -366,9 +426,14 @@ object SceneOps {
         return TransformComponent(
             x = p.x + sx * cos - sy * sin,
             y = p.y + sx * sin + sy * cos,
+            z = p.z + c.z * p.scaleZ,
             rotation = p.rotation + c.rotation,
+            rotationX = p.rotationX + c.rotationX,
+            rotationY = p.rotationY + c.rotationY,
+            rotationZ = p.rotationZ + c.rotationZ,
             scaleX = p.scaleX * c.scaleX,
             scaleY = p.scaleY * c.scaleY,
+            scaleZ = p.scaleZ * c.scaleZ,
         )
     }
 }
@@ -492,8 +557,39 @@ data class RenderScript(
 )
 
 @Serializable
+data class RenderObject3D(
+    val id: String,
+    val shape: String,
+    val x: Float, val y: Float, val z: Float,
+    val rx: Float, val ry: Float, val rz: Float,
+    val sx: Float, val sy: Float, val sz: Float,
+    val r: Float, val g: Float, val b: Float, val a: Float,
+    val texture: String? = null,
+    val selected: Boolean = false,
+)
+
+@Serializable
+data class RenderLight(
+    val dirX: Float, val dirY: Float, val dirZ: Float,
+    val r: Float, val g: Float, val b: Float,
+    val ambientR: Float, val ambientG: Float, val ambientB: Float,
+)
+
+@Serializable
+data class RenderAnimationKey(val t: Float, val value: Float)
+
+@Serializable
+data class RenderAnimationTrack(
+    val entityId: String,
+    val property: String,
+    val keys: List<RenderAnimationKey>,
+    val loop: Boolean = true,
+)
+
+@Serializable
 data class RenderScene(
     val version: Int = SCENE_FORMAT_VERSION,
+    val mode3d: Boolean = false,
     val sprites: List<RenderSprite>,
     val bodies: List<RenderBody> = emptyList(),
     val gameCamera: RenderGameCamera? = null,
@@ -502,6 +598,9 @@ data class RenderScene(
     val audioSources: List<RenderAudioSource> = emptyList(),
     val scripts: List<RenderScript> = emptyList(),
     val uiElements: List<RenderUiElement> = emptyList(),
+    val objects3d: List<RenderObject3D> = emptyList(),
+    val light: RenderLight? = null,
+    val animations: List<RenderAnimationTrack> = emptyList(),
 )
 
 private fun bodyTypeToInt(type: String): Int = when (type) {
@@ -511,7 +610,7 @@ private fun bodyTypeToInt(type: String): Int = when (type) {
 }
 
 /** Build the flat render scene: only enabled entities with sprites, sorted. */
-fun buildRenderScene(scene: Scene, selectedId: String?): RenderScene {
+fun buildRenderScene(scene: Scene, selectedId: String?, mode3d: Boolean = false): RenderScene {
     val sprites = scene.entities
         .filter { it.enabled && it.sprite != null && isChainEnabled(scene, it) }
         .sortedBy { it.sprite!!.sortingOrder }
@@ -645,7 +744,47 @@ fun buildRenderScene(scene: Scene, selectedId: String?): RenderScene {
         .filter { it.enabled && it.script != null && isChainEnabled(scene, it) }
         .map { e -> RenderScript(id = e.id, script = e.script!!.scriptPath) }
 
+    val objects3d = scene.entities
+        .filter { it.enabled && it.mesh != null && isChainEnabled(scene, it) }
+        .map { e ->
+            val wt = SceneOps.worldTransform(scene, e.id)
+            val m = e.mesh!!
+            RenderObject3D(
+                id = e.id,
+                shape = m.shape,
+                x = wt.x, y = wt.y, z = wt.z,
+                rx = wt.rotationX, ry = wt.rotationY, rz = wt.rotationZ,
+                sx = wt.scaleX, sy = wt.scaleY, sz = wt.scaleZ,
+                r = m.r, g = m.g, b = m.b, a = m.a,
+                texture = m.texturePath,
+                selected = e.id == selectedId,
+            )
+        }
+
+    val lightEntity = scene.entities.firstOrNull { it.enabled && it.light != null }
+    val light = lightEntity?.light?.let { l ->
+        RenderLight(
+            dirX = l.dirX, dirY = l.dirY, dirZ = l.dirZ,
+            r = l.r, g = l.g, b = l.b,
+            ambientR = l.ambientR, ambientG = l.ambientG, ambientB = l.ambientB,
+        )
+    }
+
+    val animations = scene.entities
+        .filter { it.enabled && it.animation != null && isChainEnabled(scene, it) }
+        .flatMap { e ->
+            e.animation!!.tracks.map { track ->
+                RenderAnimationTrack(
+                    entityId = e.id,
+                    property = track.property,
+                    keys = track.keys.map { RenderAnimationKey(it.t, it.value) },
+                    loop = track.loop,
+                )
+            }
+        }
+
     return RenderScene(
+        mode3d = mode3d,
         sprites = sprites,
         bodies = bodies,
         gameCamera = gameCamera,
@@ -654,6 +793,9 @@ fun buildRenderScene(scene: Scene, selectedId: String?): RenderScene {
         audioSources = audioSources,
         scripts = scripts,
         uiElements = uiElements,
+        objects3d = objects3d,
+        light = light,
+        animations = animations,
     )
 }
 

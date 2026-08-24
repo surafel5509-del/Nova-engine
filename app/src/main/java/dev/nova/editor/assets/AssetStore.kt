@@ -66,4 +66,57 @@ class AssetStore(private val projectPath: String) {
         val f = File(projectPath, relativePath)
         return if (f.isFile) f.readBytes() else null
     }
+
+    /** Moves a file or folder to a new relative directory. Returns the new path or null. */
+    fun move(relativePath: String, newDirRelative: String): String? {
+        val src = File(projectPath, relativePath)
+        if (!src.exists()) return null
+        val destDir = File(projectPath, newDirRelative).apply { mkdirs() }
+        val dest = File(destDir, src.name)
+        if (dest.exists()) return null
+        return if (src.renameTo(dest)) {
+            val rel = File(projectPath).toURI().relativize(dest.toURI()).path.trimEnd('/')
+            rel
+        } else null
+    }
+
+    /** Creates an empty (or text) file. Returns its relative path or null. */
+    fun createFile(relativeDir: String, name: String, content: String = ""): String? {
+        val safe = name.trim().replace('/', '_')
+        if (safe.isBlank()) return null
+        val file = File(projectPath, "$relativeDir/$safe")
+        if (file.exists()) return null
+        file.parentFile?.mkdirs()
+        file.writeText(content)
+        return "$relativeDir/$safe"
+    }
+
+    /**
+     * Imports a game-source ZIP into [destDirRelative], extracting entries
+     * safely (no path traversal). Returns the number of files extracted.
+     */
+    fun importZip(zipBytes: ByteArray, destDirRelative: String): Int {
+        var count = 0
+        val destRoot = File(projectPath, destDirRelative).apply { mkdirs() }
+        val destRootPath = destRoot.canonicalPath + File.separator
+        java.util.zip.ZipInputStream(zipBytes.inputStream().buffered()).use { zip ->
+            var entry = zip.nextEntry
+            while (entry != null) {
+                if (!entry.isDirectory) {
+                    val entryName = entry.name
+                    // Path-traversal guard: reject entries that escape the dest root
+                    // both lexically ("..") and after canonicalization.
+                    val outFile = File(destRoot, entryName)
+                    if (!entryName.contains("..") && outFile.canonicalPath.startsWith(destRootPath)) {
+                        outFile.parentFile?.mkdirs()
+                        outFile.outputStream().use { zip.copyTo(it) }
+                        count++
+                    }
+                }
+                zip.closeEntry()
+                entry = zip.nextEntry
+            }
+        }
+        return count
+    }
 }

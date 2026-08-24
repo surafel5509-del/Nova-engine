@@ -358,6 +358,73 @@ fun InspectorPanel(
             HorizontalDivider(color = NovaColors.PanelBorder)
         }
 
+        // --- 3D Mesh ---
+        selected.mesh?.let { mesh ->
+            ComponentHeader(
+                title = "3D Mesh",
+                onReset = { viewModel.updateEntity(selected.id, "Reset Mesh") { it.copy(mesh = dev.nova.editor.scene.MeshComponent()) } },
+                onRemove = { viewModel.updateEntity(selected.id, "Remove Mesh component") { it.copy(mesh = null) } },
+            )
+            MeshShapeDropdown(mesh.shape) { v ->
+                viewModel.updateEntity(selected.id, "Edit mesh shape") { e -> e.copy(mesh = e.mesh?.copy(shape = v)) }
+            }
+            Text("Color", style = MaterialTheme.typography.bodySmall, color = NovaColors.TextDim)
+            ColorSlider("R", mesh.r) { v -> viewModel.updateEntity(selected.id, "Edit mesh color") { e -> e.copy(mesh = e.mesh?.copy(r = v)) } }
+            ColorSlider("G", mesh.g) { v -> viewModel.updateEntity(selected.id, "Edit mesh color") { e -> e.copy(mesh = e.mesh?.copy(g = v)) } }
+            ColorSlider("B", mesh.b) { v -> viewModel.updateEntity(selected.id, "Edit mesh color") { e -> e.copy(mesh = e.mesh?.copy(b = v)) } }
+            // 3D transform (position/rotation/scale on all axes).
+            val t3 = selected.transform
+            FloatField("Pos X", t3.x) { v -> viewModel.updateEntity(selected.id, "Edit pos X") { e -> e.copy(transform = e.transform.copy(x = v)) } }
+            FloatField("Pos Y", t3.y) { v -> viewModel.updateEntity(selected.id, "Edit pos Y") { e -> e.copy(transform = e.transform.copy(y = v)) } }
+            FloatField("Pos Z", t3.z) { v -> viewModel.updateEntity(selected.id, "Edit pos Z") { e -> e.copy(transform = e.transform.copy(z = v)) } }
+            FloatField("Rot X", t3.rotationX) { v -> viewModel.updateEntity(selected.id, "Edit rot X") { e -> e.copy(transform = e.transform.copy(rotationX = v)) } }
+            FloatField("Rot Y", t3.rotationY) { v -> viewModel.updateEntity(selected.id, "Edit rot Y") { e -> e.copy(transform = e.transform.copy(rotationY = v)) } }
+            FloatField("Rot Z", t3.rotationZ) { v -> viewModel.updateEntity(selected.id, "Edit rot Z") { e -> e.copy(transform = e.transform.copy(rotationZ = v)) } }
+            FloatField("Scale X", t3.scaleX) { v -> viewModel.updateEntity(selected.id, "Edit scale X") { e -> e.copy(transform = e.transform.copy(scaleX = v)) } }
+            FloatField("Scale Y", t3.scaleY) { v -> viewModel.updateEntity(selected.id, "Edit scale Y") { e -> e.copy(transform = e.transform.copy(scaleY = v)) } }
+            FloatField("Scale Z", t3.scaleZ) { v -> viewModel.updateEntity(selected.id, "Edit scale Z") { e -> e.copy(transform = e.transform.copy(scaleZ = v)) } }
+            Spacer(Modifier.height(8.dp))
+            HorizontalDivider(color = NovaColors.PanelBorder)
+        }
+
+        // --- Light ---
+        selected.light?.let { light ->
+            ComponentHeader(
+                title = "Directional Light",
+                onReset = { viewModel.updateEntity(selected.id, "Reset Light") { it.copy(light = dev.nova.editor.scene.LightComponent()) } },
+                onRemove = { viewModel.updateEntity(selected.id, "Remove Light component") { it.copy(light = null) } },
+            )
+            FloatField("Direction X", light.dirX) { v -> viewModel.updateEntity(selected.id, "Edit light dir") { e -> e.copy(light = e.light?.copy(dirX = v)) } }
+            FloatField("Direction Y", light.dirY) { v -> viewModel.updateEntity(selected.id, "Edit light dir") { e -> e.copy(light = e.light?.copy(dirY = v)) } }
+            FloatField("Direction Z", light.dirZ) { v -> viewModel.updateEntity(selected.id, "Edit light dir") { e -> e.copy(light = e.light?.copy(dirZ = v)) } }
+            Text("Color", style = MaterialTheme.typography.bodySmall, color = NovaColors.TextDim)
+            ColorSlider("R", light.r) { v -> viewModel.updateEntity(selected.id, "Edit light color") { e -> e.copy(light = e.light?.copy(r = v)) } }
+            ColorSlider("G", light.g) { v -> viewModel.updateEntity(selected.id, "Edit light color") { e -> e.copy(light = e.light?.copy(g = v)) } }
+            ColorSlider("B", light.b) { v -> viewModel.updateEntity(selected.id, "Edit light color") { e -> e.copy(light = e.light?.copy(b = v)) } }
+            Text("Ambient", style = MaterialTheme.typography.bodySmall, color = NovaColors.TextDim)
+            ColorSlider("R", light.ambientR) { v -> viewModel.updateEntity(selected.id, "Edit ambient") { e -> e.copy(light = e.light?.copy(ambientR = v)) } }
+            ColorSlider("G", light.ambientG) { v -> viewModel.updateEntity(selected.id, "Edit ambient") { e -> e.copy(light = e.light?.copy(ambientG = v)) } }
+            ColorSlider("B", light.ambientB) { v -> viewModel.updateEntity(selected.id, "Edit ambient") { e -> e.copy(light = e.light?.copy(ambientB = v)) } }
+            Spacer(Modifier.height(8.dp))
+            HorizontalDivider(color = NovaColors.PanelBorder)
+        }
+
+        // --- Animation clip ---
+        selected.animation?.let { clip ->
+            ComponentHeader(
+                title = "Animation",
+                onReset = { viewModel.updateEntity(selected.id, "Reset Animation") { it.copy(animation = dev.nova.editor.scene.AnimationClipComponent()) } },
+                onRemove = { viewModel.updateEntity(selected.id, "Remove Animation") { it.copy(animation = null) } },
+            )
+            Text(
+                "${clip.tracks.size} track(s). Edit them in the Timeline tab.",
+                style = MaterialTheme.typography.bodySmall,
+                color = NovaColors.TextDim,
+            )
+            Spacer(Modifier.height(8.dp))
+            HorizontalDivider(color = NovaColors.PanelBorder)
+        }
+
         // --- Add component ---
         Spacer(Modifier.height(8.dp))
         Text("Add Component", style = MaterialTheme.typography.titleSmall, color = NovaColors.Text)
@@ -406,6 +473,21 @@ fun InspectorPanel(
                 OutlinedButton(onClick = {
                     viewModel.updateEntity(selected.id, "Add UI component") { it.copy(ui = dev.nova.editor.scene.UiComponent()) }
                 }) { Text("UI") }
+            }
+            if (selected.mesh == null) {
+                OutlinedButton(onClick = {
+                    viewModel.updateEntity(selected.id, "Add Mesh component") { it.copy(mesh = dev.nova.editor.scene.MeshComponent()) }
+                }) { Text("3D") }
+            }
+            if (selected.light == null) {
+                OutlinedButton(onClick = {
+                    viewModel.updateEntity(selected.id, "Add Light component") { it.copy(light = dev.nova.editor.scene.LightComponent()) }
+                }) { Text("Light") }
+            }
+            if (selected.animation == null) {
+                OutlinedButton(onClick = {
+                    viewModel.updateEntity(selected.id, "Add Animation component") { it.copy(animation = dev.nova.editor.scene.AnimationClipComponent()) }
+                }) { Text("Anim") }
             }
         }
     }
@@ -491,6 +573,22 @@ private fun UiKindDropdown(current: String, onSelected: (String) -> Unit) {
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             kinds.forEach { kind ->
                 DropdownMenuItem(text = { Text(kind) }, onClick = { onSelected(kind); expanded = false })
+            }
+        }
+    }
+}
+
+@Composable
+private fun MeshShapeDropdown(current: String, onSelected: (String) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val shapes = listOf("cube", "cylinder", "ground", "plane")
+    Box {
+        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+            Text("Shape: $current")
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            shapes.forEach { shape ->
+                DropdownMenuItem(text = { Text(shape) }, onClick = { onSelected(shape); expanded = false })
             }
         }
     }

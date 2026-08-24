@@ -16,6 +16,7 @@ target_include_directories(lua PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/third_party/lu
 add_library(novaengine SHARED
     core/Engine.cpp
     scene/RenderScene.cpp
+    scene/AnimationSampler.cpp
     physics/PhysicsWorld.cpp
     particles/ParticleSystem.cpp
     scripting/LuaScriptEngine.cpp
@@ -23,6 +24,8 @@ add_library(novaengine SHARED
     rendering/Texture.cpp
     rendering/SpriteBatch.cpp
     rendering/GlesRenderer.cpp
+    rendering/Mesh3D.cpp
+    rendering/Renderer3D.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../platform/android/jni/bridge.cpp
 )
 
