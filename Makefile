@@ -51,8 +51,21 @@ all: test player server
 help:
 	@grep -E '^#   ' Makefile | sed 's/^#   //'
 
-$(OBJ_DIR)/%.o: %.cpp
+# Objects do not remember the flags they were compiled with, so switching
+# between the normal and the sanitizer build used to silently relink the old
+# objects into the new binary -- which fails to link, or worse, links without
+# the instrumentation it was asked for. A stamp holding the current flags is
+# written next to them, and a mismatch forces a rebuild.
+FLAGS_STAMP := $(OBJ_DIR)/.flags
+FLAG_SIG := $(CXXSTD)|$(OPT)|$(WARN)|$(LDFLAGS)
+
+$(FLAGS_STAMP):
+	@mkdir -p $(OBJ_DIR)
+	@echo '$(FLAG_SIG)' > $@
+
+$(OBJ_DIR)/%.o: %.cpp $(FLAGS_STAMP)
 	@mkdir -p $(dir $@)
+	@if [ "$$(cat $(FLAGS_STAMP) 2>/dev/null)" != '$(FLAG_SIG)' ]; then echo '$(FLAG_SIG)' > $(FLAGS_STAMP); fi
 	$(CXX) $(CXXFLAGS) $(INCLUDE) -MMD -MP -c $< -o $@
 
 $(OBJ_DIR)/legacy/%.o: %.cpp
@@ -88,7 +101,6 @@ legacy: $(BIN_DIR)/nova_legacy_tests
 
 # --- sanitizer build --------------------------------------------------------
 asan:
-	@$(MAKE) --no-print-directory clean
 	@$(MAKE) --no-print-directory test OPT="-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer" \
 	         LDFLAGS="-fsanitize=address,undefined"
 
