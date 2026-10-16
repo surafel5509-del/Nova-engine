@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nova Editor</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <header id="titlebar">
+    <div class="brand">
+      <span class="mark"></span>
+      <span class="name">NOVA</span>
+      <span class="sub" id="version">editor</span>
+    </div>
+    <div class="toolbar" id="toolbar">
+      <button data-cmd="play"  class="tool primary" title="Pause / resume the simulation">Play</button>
+      <button data-cmd="step"  class="tool" title="Advance one fixed step">Step</button>
+      <button data-cmd="spawn" class="tool" title="Drop another body">Spawn</button>
+      <button data-cmd="reset" class="tool" title="Rebuild the stack">Reset</button>
+      <span class="sep"></span>
+      <button data-cmd="grid on"  class="tool toggle" title="Toggle the background grid">Grid</button>
+      <button data-cmd="screenshot" class="tool" title="Download the current frame as a PNG">Frame</button>
+    </div>
+    <div class="status" id="status">
+      <span class="dot" id="dot"></span>
+      <span id="statusText">connecting…</span>
+    </div>
+  </header>
+
+  <main id="workspace">
+
+    <aside id="left" class="panel">
+      <section class="pane">
+        <h2>Hierarchy</h2>
+        <ul id="hierarchy" class="tree"></ul>
+      </section>
+      <section class="pane">
+        <h2>Inspector</h2>
+        <div id="inspector" class="inspector">
+          <p class="muted">Select a node in the hierarchy.</p>
+        </div>
+      </section>
+    </aside>
+
+    <section id="stage">
+      <div id="viewport">
+        <canvas id="frame" width="960" height="540"></canvas>
+        <div id="overlay">
+          <div id="placeholder">
+            <div class="spinner"></div>
+            <p>Waiting for the first frame…</p>
+          </div>
+        </div>
+        <div id="paused" class="badge hidden">PAUSED</div>
+      </div>
+
+      <div id="console">
+        <div id="consoleLog" role="log"></div>
+        <form id="consoleForm" autocomplete="off">
+          <span class="prompt">&gt;</span>
+          <input id="consoleInput" spellcheck="false" placeholder="type a command: pause, resume, step, spawn, reset, grid off, gravity 0, width 1280, help">
+        </form>
+      </div>
+    </section>
+
+    <aside id="right" class="panel">
+      <section class="pane">
+        <h2>Telemetry</h2>
+        <dl id="telemetry" class="stats"></dl>
+      </section>
+      <section class="pane">
+        <h2>Actions</h2>
+        <ul id="actions" class="actions"></ul>
+      </section>
+      <section class="pane">
+        <h2>Host</h2>
+        <dl id="hostStats" class="stats"></dl>
+      </section>
+    </aside>
+
+  </main>
+
+  <footer id="statusbar">
+    <span id="footerLeft">nova engine — http server, websocket stream, software rasterizer</span>
+    <span id="footerRight"></span>
+  </footer>
+
+</div>
+<script src="app.js"></script>
+</body>
+</html>
